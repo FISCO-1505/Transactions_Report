@@ -9,7 +9,9 @@ df = pd.DataFrame(np.random.randint(10,100,size=(10,3)), columns=["Col1", "Col2"
 
 st.dataframe(df)
 
-st.subheader("Otra prueba")
+st.header("Header")
+st.subheader("Subheader")
+st.write("Texto normal")
 
 df1 = pd.DataFrame(np.random.randint(10,100,size=(10,5)), columns=["Col1", "Col2", "Col3", "Col4", "Col5"])
 
