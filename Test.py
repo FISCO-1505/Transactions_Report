@@ -19,3 +19,6 @@ st.dataframe(df1)
 
 secret = st.secrets["SECRET1"]
 st.write(secret)
+
+secret2 = st.secrets["SECRET2"]
+st.write(secret2)
