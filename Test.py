@@ -16,3 +16,6 @@ st.write("Texto normal")
 df1 = pd.DataFrame(np.random.randint(10,100,size=(10,5)), columns=["Col1", "Col2", "Col3", "Col4", "Col5"])
 
 st.dataframe(df1)
+
+secret = st.secrets["SECRET1"]
+st.write(secret)
