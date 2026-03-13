@@ -14,8 +14,8 @@ env.bak/
 venv.bak/
 
 # Excel files
-#*.xlsx
-#*.xls
+*.xlsx
+*.xls
 
 # Jupyter Notebook
 .ipynb_checkpoints
