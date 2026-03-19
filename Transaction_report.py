@@ -294,12 +294,12 @@ def main():
                 3. Click the Filter file button.""")
              st.markdown("""            
                    If necessary columns are missing, you will see the message:""")
-             st.warning("The file doesn't contain all the necessary columns. The following columns are missing:")
+             st.error("❌ The file doesn't contain all the necessary columns. The following columns are missing:")
              st.markdown("""              
                 In that case, you should review the file and upload it again, making sure it contains the necessary columns.""")
              st.markdown(""" 
                 If the file has the necessary columns to perform the filter, you will see the message:""")
-             st.success("File ready to download") 
+             st.success("✅ File ready to download") 
              st.markdown("""
                 4. Enter the name you want to use to save the filtered file. 
                 5. Click the Download Excel button.""")  
