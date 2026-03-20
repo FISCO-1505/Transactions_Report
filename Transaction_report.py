@@ -95,7 +95,7 @@ def main():
                                  default="Home"
                                 )
         # Ejecutar opción seleccionada
-        if selection == "Generate report":
+        if selection == "Generate Report":
 
             # Columnas necesarias
             cols={"Trade Date" : "Trade Date", 
