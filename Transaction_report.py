@@ -21,7 +21,7 @@ def ensure_private_lib():
         # En local usamos la carpeta vendor en el directorio actual
         local_lib_path = os.path.join(os.getcwd(), "vendor")
 
-    # Asgurar que la ruta exista
+    # Asegurar que la ruta exista
     if not os.path.exists(local_lib_path):
         os.makedirs(local_lib_path)
     
@@ -91,7 +91,7 @@ def main():
             st.title(":blue[Select an option]")
             # Pills Options
             selection = st.pills(label="Options", label_visibility="collapsed",
-                                 options=["Home", "Generate report"],
+                                 options=["Home", "Generate Report"],
                                  default="Home"
                                 )
         # Ejecutar opción seleccionada
@@ -108,40 +108,57 @@ def main():
                 "Referencia Movimiento" : "Referencia Movimiento"} 
             
             # Función para realizar el filtro de los datos
-            def filtrar(df, columnas):
+            def filtrar(df, cols):
             
                 # Seleccionar columnas necesarias y renombrarlas
-                df = df[list(cols.keys())].rename(columns=cols)
-                
-                # Filtrar tipo de transacción
-                df_filtrado = df.query("`Transaction Type` in ['Addition', 'Withdrawal of Cash']")
+                df = (df
+                      [list(cols.keys())]
+                      .rename(columns=cols)
+                      .query("`Transaction Type` in ['Addition', 'Withdrawal of Cash']")
+                )
 
                 # Eliminar NAN de la columna Referencia Movimiento
-                df_filtrado = df_filtrado[df_filtrado["Referencia Movimiento"].notna()]
+                df = df[df["Referencia Movimiento"].notna()]
                 
                 # Limpiar espacios a los datos de la columna Referencia Movimientos
-                df_filtrado["Referencia Movimiento"] = (
-                    df_filtrado["Referencia Movimiento"]
+                df["Referencia Movimiento"] = (
+                    df["Referencia Movimiento"]
                     .astype(str)
                     .str.strip()
                     .str.upper()
                 )
                 # Eliminar referencias de movimientos vacías
-                df_filtrado = df_filtrado[df_filtrado["Referencia Movimiento"] != ""]
+                df = df[df["Referencia Movimiento"] != ""]
 
                 # Excluir ciertos textos
-                mask_excluir = df_filtrado["Referencia Movimiento"].str.contains(
-                    r"\b(debit|internal|interest|card)\b",
-                    case=False,
-                    regex=True
-                    ) | df_filtrado["Referencia Movimiento"].str.match(
-                    r"(?i)^(transfer)$"
+                mask_excluir = (
+                    df["Referencia Movimiento"].str.contains(
+                        r"\b(debit|internal|interest|card)\b",
+                        case=False,
+                        regex=True
+                    ) 
+                    | df["Referencia Movimiento"].str.match(r"(?i)^(transfer)$")
                 )
 
                 # Guardamos nuestra tabla filtrada
-                df_filtrado = df_filtrado[~mask_excluir] 
+                df = df[~mask_excluir] 
 
-                return df_filtrado
+                # Ordenar los datos 
+                df = df.sort_values(by=["Trade Date", "Client"])
+
+                cambio_fecha = df['Trade Date'].ne(df['Trade Date'].shift())
+
+                grupos = df.groupby(cambio_fecha.cumsum(), group_keys=False)
+                df = grupos.apply(
+                    lambda g: pd.concat(
+                        [g, pd.DataFrame([[None]*len(g.columns)], columns=g.columns)],
+                        ignore_index=True  
+                    )
+                )
+
+                df = df.iloc[:-1]
+
+                return df.reset_index(drop=True)
             
             # Titulo 
             st.title("Transaction Report")
@@ -168,9 +185,22 @@ def main():
                 # Mensaje exitoso
                 st.success("File uploaded successfully") 
                 
-            if df is not None:
+            if df is not None: 
 
-                # Lógica que seguirá el botón filtrar
+                fecha_min = df['Trade Date'].min()
+                fecha_max = df['Trade Date'].max()
+
+                if fecha_min == fecha_max:
+                    default_name = f"Transaction_{fecha_min}"
+                else:
+                    default_name = f"Transaction_{fecha_min}-{fecha_max}"
+
+                if "archivo_listo" not in st.session_state:
+                    st.session_state.archivo_listo = False
+                if "nombre_archivo" not in st.session_state:
+                    st.session_state.nombre_archivo = default_name 
+
+                # ----- Boón para filtrar ----    
                 if st.button("Filter file"):
 
                     # Quitar espacios en los nombres de las columnas
@@ -194,10 +224,6 @@ def main():
                         filtrar(df, cols)
                         df_filtrado = filtrar(df, cols)
 
-                        # Obtener fecha mínima y máxima 
-                        fecha_min = df_filtrado['Trade Date'].min()
-                        fecha_max = df_filtrado['Trade Date'].max()  
-                        
                         # Obtener longitud de la referencia
                         ancho = df_filtrado['Referencia Movimiento'].str.len().max()
 
@@ -228,10 +254,10 @@ def main():
                                 "Trade Date": workbook.add_format({"align": "center", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000"}),
                                 "Client": workbook.add_format({"align": "left", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000"}),
                                 "Transaction Type": workbook.add_format({"align": "left", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000"}),
-                                "Net Amount Local": workbook.add_format({"align": "right", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000","num_format": "General"}),
+                                "Net Amount Local": workbook.add_format({"align": "right", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000","num_format": "#,##0.00"}),
                                 "Local Currency Code": workbook.add_format({"align": "center", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000"}),
                                 "Local To Base FX Rate": workbook.add_format({"align": "right", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000","num_format": "0.00"}),
-                                "Net Amount Base": workbook.add_format({"align": "right", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000","num_format": "General"}),
+                                "Net Amount Base": workbook.add_format({"align": "right", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000","num_format": "#,##0.00"}),
                                 "Referencia Movimiento": workbook.add_format({"align": "left", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000"})
                             } 
                             
@@ -264,22 +290,30 @@ def main():
                         # Muve el cursor al inicio               
                         output.seek(0)
 
-                        # Mensaje listo para descargar
-                        st.success("✅ File ready to download")
+                        # Guardar archivo en session_state
+                        st.session_state.output_file = output
+                        st.session_state.archivo_listo = True
 
-                        # Nombre predeterminado para guardar el archivo
-                        if fecha_min==fecha_max: 
-                            nombre_archivo = st.text_input("File name", f"Transaction_{fecha_min}")
-                        else: 
-                            nombre_archivo = st.text_input("File name", f"Transaction_{fecha_min}-{fecha_max}")
+                        # Mensaje listo para descargar
+                        st.success("✅ File ready to download") 
+
+                if st.session_state.archivo_listo:
+                    # Input editable
+                    st.session_state.nombre_archivo = st.text_input(
+                        "File name", 
+                        value = st.session_state.nombre_archivo
+                     )
+                    
+                    nombre_archivo = st.session_state.nombre_archivo.strip() or "archivo"
                         
-                        # Botón para descargar
-                        st.download_button(
-                            label="Download Excel",
-                            data=output,
-                            file_name=f"{nombre_archivo}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        )
+                        
+                    # Botón para descargar
+                    st.download_button(
+                        label="Download Excel",
+                        data=st.session_state.output_file,
+                        file_name=f"{nombre_archivo}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
         else:
              # Cargar imagen
              images.imagen_home("Advisors") 
@@ -303,11 +337,14 @@ def main():
              st.success("✅ File ready to download") 
              st.markdown("""
                 4. Enter the name you want to use to save the filtered file. 
-                5. Click the Download Excel button.""")  
-             st.warning("Do not close the page during the download.")
+                5. Press Enter to apply. """)  
+             st.warning("If you don't press Enter, the name change won't be applied.")
+             st.markdown("""                            
+                6. Click the Download Excel button.""")  
+             st.warning("Don't close the page during the download.")
              st.markdown("""            
-                6. Click Save As and choose the folder.
-                7. Log out.
+                7. Click Save As and choose the folder.
+                8. Log out.
                          """)           
              
              
