@@ -315,7 +315,7 @@ def main():
                         file_name=f"{nombre_archivo}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
-                    st.session_state.archivo_listo = False
+                    
         else:
              # Cargar imagen
              images.imagen_home("Advisors") 
