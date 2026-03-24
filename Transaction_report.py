@@ -146,8 +146,10 @@ def main():
                 # Ordenar los datos 
                 df = df.sort_values(by=["Trade Date", "Client"])
 
+                # Guardar cambio de fechas entre filas con una columna de True o False
                 cambio_fecha = df['Trade Date'].ne(df['Trade Date'].shift())
 
+                # Agrupar los datos con misma fecha e inserta fila en blanco
                 grupos = df.groupby(cambio_fecha.cumsum(), group_keys=False)
                 df = grupos.apply(
                     lambda g: pd.concat(
@@ -156,6 +158,7 @@ def main():
                     )
                 )
 
+                # elimina la columna de cambio de fechas del data frame
                 df = df.iloc[:-1]
 
                 return df.reset_index(drop=True)
@@ -187,14 +190,17 @@ def main():
                 
             if df is not None: 
 
+                # Obtener fecha minima y máxima
                 fecha_min = df['Trade Date'].min()
                 fecha_max = df['Trade Date'].max()
 
+                # Nombre por default 
                 if fecha_min == fecha_max:
                     default_name = f"Transaction_{fecha_min}"
                 else:
                     default_name = f"Transaction_{fecha_min}-{fecha_max}"
-
+    
+                # Definir el valor inicial en session_state de archivo_listo y de nombre_archivo si no existen
                 if "archivo_listo" not in st.session_state:
                     st.session_state.archivo_listo = False
                 if "nombre_archivo" not in st.session_state:
@@ -221,7 +227,7 @@ def main():
 
                     else:
                         # Realizar el filtro
-                        filtrar(df, cols)
+
                         df_filtrado = filtrar(df, cols)
 
                         # Obtener longitud de la referencia
@@ -243,7 +249,7 @@ def main():
                                 "Client": 12,
                                 "Transaction Type": 20,
                                 "Net Amount Local": 18,
-                                "Local Currency Code": 10,
+                                "Local Currency Code": 11,
                                 "Local To Base FX Rate": 10,
                                 "Net Amount Base": 18,
                                 "Referencia Movimiento": ancho+18
@@ -304,7 +310,8 @@ def main():
                         value = st.session_state.nombre_archivo
                      )
                     
-                    nombre_archivo = st.session_state.nombre_archivo.strip() or "archivo"
+                    # Nombre del archivo guardado en session_sate, en caso de ser vacío guarda el nombre Report 
+                    nombre_archivo = st.session_state.nombre_archivo.strip() or "Report"
                         
                         
                     # Botón para descargar
@@ -314,6 +321,7 @@ def main():
                         file_name=f"{nombre_archivo}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
+                    st.session_state.archivo_listo = False
         else:
              # Cargar imagen
              images.imagen_home("Advisors") 
