@@ -133,7 +133,7 @@ def main():
                 # Excluir ciertos textos
                 mask_excluir = (
                     df["Referencia Movimiento"].str.contains(
-                        r"\b(debit|internal|interest|card)\b",
+                        r"\b(?:debit|internal|interest|card)\b",
                         case=False,
                         regex=True
                     ) 
