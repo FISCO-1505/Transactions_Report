@@ -309,12 +309,23 @@ def main():
                         
                         
                     # Botón para descargar
-                    st.download_button(
+                    clicked = st.download_button(
                         label="Download Excel",
                         data=st.session_state.output_file,
                         file_name=f"{nombre_archivo}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",          
                     )
+
+                    
+                    if clicked:
+
+                        st.session_state.archivo_listo = False
+
+                        st.cache_data.clear()
+                        st.cache_resource.clear()
+
+                        # Forzar rerun
+                        st.rerun()
                     
         else:
              # Cargar imagen
