@@ -146,22 +146,7 @@ def main():
                 # Ordenar los datos 
                 df = df.sort_values(by=["Trade Date", "Client"])
 
-                # Guardar cambio de fechas entre filas con una columna de True o False
-                cambio_fecha = df['Trade Date'].ne(df['Trade Date'].shift())
-
-                # Agrupar los datos con misma fecha e inserta fila en blanco
-                grupos = df.groupby(cambio_fecha.cumsum(), group_keys=False)
-                df = grupos.apply(
-                    lambda g: pd.concat(
-                        [g, pd.DataFrame([[None]*len(g.columns)], columns=g.columns)],
-                        ignore_index=True  
-                    )
-                )
-
-                # elimina la columna de cambio de fechas del data frame
-                df = df.iloc[:-1]
-
-                return df.reset_index(drop=True)
+                return df
             
             # Titulo 
             st.title("Transaction Report")
@@ -236,72 +221,81 @@ def main():
                     
                         # Crear archivo Excel en memoria
                         output = BytesIO()
-                        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-                            df_filtrado.to_excel(writer, index=False, 
-                                                 sheet_name="Filtered_data",startrow=1,header=False)
-                            
-                            workbook  = writer.book
-                            worksheet = writer.sheets["Filtered_data"]
+                        workbook = xlsxwriter.Workbook(output, {'in_memory': True})
+                        worksheet = workbook.add_worksheet("Filtered_data")
+                        worksheet.hide_gridlines(0) #2
+                
+                
+                        row=1
+                        for date in df_filtrado['Trade Date'].unique():
+                            col=0
+                            df_query = df_filtrado.query("`Trade Date` == @date").copy()
+                            n_rows = df_query.shape[0]
+                
+                            for cols in df_query.columns:
+                                worksheet.write_column(row, col, df_query[cols])
+                                col += 1
+                            row = row + n_rows + 1
 
-                            # Ancho de cada columna 
-                            column_widths = {
-                                "Trade Date": 14,
-                                "Client": 12,
-                                "Transaction Type": 20,
-                                "Net Amount Local": 18,
-                                "Local Currency Code": 11,
-                                "Local To Base FX Rate": 10,
-                                "Net Amount Base": 18,
-                                "Referencia Movimiento": ancho+18
-                            }
+                        # Ancho de cada columna 
+                        column_widths = {
+                            "Trade Date": 14,
+                            "Client": 12,
+                            "Transaction Type": 20,
+                            "Net Amount Local": 18,
+                            "Local Currency Code": 11,
+                            "Local To Base FX Rate": 10,
+                            "Net Amount Base": 18,
+                            "Referencia Movimiento": ancho+18
+                        }
 
                         # Dar formatos a cada columna
-                            column_formats = {
-                                "Trade Date": workbook.add_format({"align": "center", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000"}),
-                                "Client": workbook.add_format({"align": "left", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000"}),
-                                "Transaction Type": workbook.add_format({"align": "left", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000"}),
-                                "Net Amount Local": workbook.add_format({"align": "right", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000","num_format": "#,##0.00"}),
-                                "Local Currency Code": workbook.add_format({"align": "center", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000"}),
-                                "Local To Base FX Rate": workbook.add_format({"align": "right", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000","num_format": "0.00"}),
-                                "Net Amount Base": workbook.add_format({"align": "right", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000","num_format": "#,##0.00"}),
-                                "Referencia Movimiento": workbook.add_format({"align": "left", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000"})
-                            } 
+                        column_formats = {
+                            "Trade Date": workbook.add_format({"align": "center", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000"}),
+                            "Client": workbook.add_format({"align": "left", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000"}),
+                            "Transaction Type": workbook.add_format({"align": "left", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000"}),
+                            "Net Amount Local": workbook.add_format({"align": "right", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000","num_format": "#,##0.00"}),
+                            "Local Currency Code": workbook.add_format({"align": "center", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000"}),
+                            "Local To Base FX Rate": workbook.add_format({"align": "right", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000","num_format": "0.00"}),
+                            "Net Amount Base": workbook.add_format({"align": "right", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000","num_format": "#,##0.00"}),
+                            "Referencia Movimiento": workbook.add_format({"align": "left", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000"})
+                        } 
                             
-                            # Aplicar formato y ancho por columna
-                            for col_num, col_name in enumerate(df_filtrado.columns):
-                                # formato con alineación
-                                fmt = column_formats.get(col_name)  
-                                # ancho de 20 
-                                width = column_widths.get(col_name, 20)  
-                                worksheet.set_column(col_num, col_num, width, fmt)
+                        # Aplicar formato y ancho por columna
+                        for col_num, col_name in enumerate(df_filtrado.columns):
+                            # formato con alineación
+                            fmt = column_formats.get(col_name)  
+                            # ancho de 20 
+                            width = column_widths.get(col_name, 20)  
+                            worksheet.set_column(col_num, col_num, width, fmt)
                             
-                            # Formato de encabezados
-                            header_format = workbook.add_format({
-                                "bold": True,
-                                "font_name": "Lato Light",
-                                "font_size": 12,
-                                "align": "center",
-                                "valign": "vcenter",
-                                "font_color": "white",
-                                "bg_color": "#0B2E4E",
-                                "border": 0, 
-                                "text_wrap": True
-                            })
+                        # Formato de encabezados
+                        header_format = workbook.add_format({
+                            "bold": True,
+                            "font_name": "Lato Light",
+                            "font_size": 12,
+                            "align": "center",
+                            "valign": "vcenter",
+                            "font_color": "white",
+                            "bg_color": "#0B2E4E",
+                            "border": 0, 
+                            "text_wrap": True
+                        })
                         
-                            # Escribir encabezados  
-                            for col_num, column in enumerate(df_filtrado.columns):
-                                worksheet.write(0, col_num, column, header_format)
+                        # Escribir encabezados  
+                        for col_num, column in enumerate(df_filtrado.columns):
+                            worksheet.write(0, col_num, column, header_format)
                                 
-                            
+                        workbook.close()    
                         # Muve el cursor al inicio               
                         output.seek(0)
 
-                        # Guardar archivo en session_state
-                        st.session_state.output_file = output
-                        st.session_state.archivo_listo = True
+                    # Guardar archivo en session_state
+                    st.session_state.output_file = output
+                    st.session_state.archivo_listo = True
 
-                        # Mensaje listo para descargar
-                        st.success("✅ File ready to download") 
+                    # Mensaje listo para descargar
+                    st.success("✅ File ready to download") 
 
                 if st.session_state.archivo_listo:
                     # Input editable
