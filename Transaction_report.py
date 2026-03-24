@@ -319,7 +319,9 @@ def main():
                     
                     if clicked:
 
-                        st.session_state.archivo_listo = False
+                        st.session_state.archivo_listo = False 
+
+                        st.session_state.nombre_archivo = default_name
 
                         st.cache_data.clear()
                         st.cache_resource.clear()
