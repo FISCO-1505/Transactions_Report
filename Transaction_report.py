@@ -32,6 +32,7 @@ def ensure_private_lib():
     try:
         import FISCO_Sources
     except ImportError:
+        # REVISAR POSIBLE EXPIRACIÓN DEL TOKEN
         if "GITHUB_TOKEN" in st.secrets:
             token = st.secrets["GITHUB_TOKEN"]
             repo_url = f"git+https://{token}@github.com/FISCO-1505/Finaccess_Resources.git"
@@ -56,8 +57,6 @@ def ensure_private_lib():
 # Ejecutar la función
 ensure_private_lib()
 
-
-
 import pandas as pd
 from io import BytesIO
 import xlsxwriter
@@ -65,7 +64,7 @@ import xlsxwriter
 from pathlib import Path
 from FISCO_Sources import auth, crypto, images
 
-images.imagen_f("Transaction Report")
+images.imagen_f("Transactions Report")
 
 def main():
     
@@ -80,10 +79,8 @@ def main():
         # Aquí puedes poner un mensaje opcional o dejarlo en blanco
         st.info("Please log in via the side menu to continue.")
 
-
     else:
         # ______________________________________ Contenido Principal ______________________________________
-
         
         # Insertar menú lateral
         with st.sidebar:
@@ -98,14 +95,14 @@ def main():
         if selection == "Generate Report":
 
             # Columnas necesarias
-            cols={"Trade Date" : "Trade Date", 
-                "Family Name" : "Client", 
-                "Transaction Type" : "Transaction Type", 
-                "Net Amount Local" : "Net Amount Local",
-                "Local Currency Code" : "Local Currency Code",
-                "Local To Base FX Rate" : "Local To Base FX Rate", 
-                "Net Amount Base" : "Net Amount Base",
-                "Referencia Movimiento" : "Referencia Movimiento"} 
+            cols = {"Trade Date" : "Trade Date", 
+                    "Family Name" : "Client", 
+                    "Transaction Type" : "Transaction Type", 
+                    "Net Amount Local" : "Net Amount Local",
+                    "Local Currency Code" : "Local Currency Code",
+                    "Local To Base FX Rate" : "Local To Base FX Rate", 
+                    "Net Amount Base" : "Net Amount Base",
+                    "Referencia Movimiento" : "Referencia Movimiento"} 
             
             # Función para realizar el filtro de los datos
             def filtrar(df, cols):
@@ -149,7 +146,7 @@ def main():
                 return df
             
             # Titulo 
-            st.title("Transaction Report")
+            st.title("Transactions Report")
 
             # Subir archivo tipo CSV o XLSX
             uploaded_file = st.file_uploader("Upload file", type=["csv", "xlsx"])
@@ -181,9 +178,9 @@ def main():
 
                 # Nombre por default 
                 if fecha_min == fecha_max:
-                    default_name = f"Transaction_{fecha_min}"
+                    default_name = f"Transactions_{fecha_min}"
                 else:
-                    default_name = f"Transaction_{fecha_min}-{fecha_max}"
+                    default_name = f"Transactions_{fecha_min}-{fecha_max}"
     
                 # Definir el valor inicial en session_state de archivo_listo y de nombre_archivo si no existen
                 if "archivo_listo" not in st.session_state:
@@ -212,12 +209,10 @@ def main():
 
                     else:
                         # Realizar el filtro
-
                         df_filtrado = filtrar(df, cols)
 
                         # Obtener longitud de la referencia
                         ancho = df_filtrado['Referencia Movimiento'].str.len().max()
-
                     
                         # Crear archivo Excel en memoria
                         output = BytesIO()
@@ -225,13 +220,14 @@ def main():
                         worksheet = workbook.add_worksheet("Filtered_data")
                         worksheet.hide_gridlines(0) #2
                 
-                
-                        row=1
+                        row = 1
+                        # Iterar fechas únicas
                         for date in df_filtrado['Trade Date'].unique():
-                            col=0
+                            col = 0
                             df_query = df_filtrado.query("`Trade Date` == @date").copy()
                             n_rows = df_query.shape[0]
-                
+
+                            # Iterar columnas y escribirlas
                             for cols in df_query.columns:
                                 worksheet.write_column(row, col, df_query[cols])
                                 col += 1
@@ -294,10 +290,10 @@ def main():
                     st.session_state.output_file = output
                     st.session_state.archivo_listo = True
 
+                if st.session_state.archivo_listo:
                     # Mensaje listo para descargar
                     st.success("✅ File ready to download") 
 
-                if st.session_state.archivo_listo:
                     # Input editable
                     st.session_state.nombre_archivo = st.text_input(
                         "File name", 
@@ -307,7 +303,6 @@ def main():
                     # Nombre del archivo guardado en session_sate, en caso de ser vacío guarda el nombre Report 
                     nombre_archivo = st.session_state.nombre_archivo.strip() or "Report"
                         
-                        
                     # Botón para descargar
                     clicked = st.download_button(
                         label="Download Excel",
@@ -316,13 +311,12 @@ def main():
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",          
                     )
 
-                    
                     if clicked:
-
+                        # Variables archivo_listo y nombre_archivo a default
                         st.session_state.archivo_listo = False 
-
                         st.session_state.nombre_archivo = default_name
 
+                        # Clear cache
                         st.cache_data.clear()
                         st.cache_resource.clear()
 
@@ -361,8 +355,6 @@ def main():
                 7. Click Save As and choose the folder.
                 8. Log out.
                          """)           
-             
-             
 
         # Botón cerrar sesión
         if st.sidebar.button("Log out"):
