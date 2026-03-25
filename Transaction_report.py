@@ -331,11 +331,11 @@ def main():
              st.header("Instructions")
              st.info("Follow the steps carefully to complete the process")
              st.markdown("""
-                1. Click the Generate Report button.
+                1. Click the **Generate Report** button.
                 2. Drag or upload the .csv or .xlsx file you want to filter, you will see the message""")
              st.success("File uploaded successfully")  
              st.markdown(""" 
-                3. Click the Filter file button.""")
+                3. Click the **Filter file** button.""")
              st.markdown("""            
                    If necessary columns are missing, you will see the message:""")
              st.error("❌ The file doesn't contain all the necessary columns. The following columns are missing:")
@@ -346,14 +346,14 @@ def main():
              st.success("✅ File ready to download") 
              st.markdown("""
                 4. Enter the name you want to use to save the filtered file. 
-                5. Press Enter to apply. """)  
+                5. **Press Enter** to apply. """)  
              st.warning("If you don't press Enter, the name change won't be applied.")
              st.markdown("""                            
                 6. Click the Download Excel button.""")  
              st.warning("Don't close the page during the download.")
              st.markdown("""            
                 7. Click Save As and choose the folder.
-                8. Log out.
+                8. Log out and close the window.
                          """)           
 
         # Botón cerrar sesión
