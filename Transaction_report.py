@@ -424,7 +424,7 @@ def main():
                         if st.session_state.archivo_listo:
                             clicked = descargar(st.session_state.nombre_archivo)
                             if clicked:
-                                st.session_state.archivo_listo = False
+                                #st.session_state.archivo_listo = False
                                 
                                 st.cache_data.clear()
                                 st.rerun()
