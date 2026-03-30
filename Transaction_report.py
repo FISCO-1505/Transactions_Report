@@ -292,8 +292,8 @@ def main():
         if "archivo_listo" not in st.session_state:
             st.session_state.archivo_listo = False
         
-        if "último_nombre" not in st.session_state:
-            st.session_state.last_uploaded_name = None
+        if "last_file" not in st.session_state:
+            st.session_state.last_file = None
 
         # ---------------------------------------------------------------------------------------------
     
@@ -317,8 +317,8 @@ def main():
             uploaded_file = st.file_uploader("Upload file", type=["csv", "xlsx"])
 
             if uploaded_file is not None:
-                if uploaded_file != st.session_state.último_nombre:
-                    st.session_state.último_nombre = uploaded_file
+                if uploaded_file != st.session_state.last_file:
+                    st.session_state.last_file = uploaded_file
                     
                     # 🔄 reset completo
                     st.session_state.filter_clicked = False
