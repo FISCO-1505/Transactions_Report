@@ -430,6 +430,8 @@ def main():
                                 st.rerun()
 
         else:
+            
+            images.imagen_home("Advisors")
             # Instrucciones
             st.header("Instructions")
             st.info("Follow the steps carefully to complete the process")
