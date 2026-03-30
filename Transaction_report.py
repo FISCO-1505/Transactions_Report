@@ -158,7 +158,8 @@ def main():
         
         # Función crear Excel
         def crear_excel(df):
-            
+
+            df = df.fillna("-")
             # Ordenar los datos 
             df = df.sort_values(by=["Trade Date", "Client"])
             
@@ -255,7 +256,7 @@ def main():
             #Botón para descargar
             clicked = st.download_button(
                 label="Download Excel",
-                data=st.session_state.output_file,
+                data=output,
                 file_name=f"{nombre_archivo}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",          
             )
@@ -300,7 +301,7 @@ def main():
                                 )
         # Ejecutar opción seleccionada
         if selection == "Generate Report":
-            st.set_page_config(page_title="Transactions Report", layout="wide")
+            #st.set_page_config(page_title="Transactions Report", layout="wide")
             st.title("🧾 Transactions Report")
 
             # ------------------------
@@ -430,7 +431,7 @@ def main():
                                 st.rerun()
 
         else:
-            
+
             images.imagen_home("Advisors")
             # Instrucciones
             st.header("Instructions")
