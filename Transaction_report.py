@@ -158,7 +158,7 @@ def main():
         
         # Función crear Excel
         def crear_excel(df):
-
+            # Reemplazar valores NAN
             df = df.fillna("-")
             # Ordenar los datos 
             df = df.sort_values(by=["Trade Date", "Client"])
@@ -248,7 +248,7 @@ def main():
         # ---------------------------------------------------------------------------------------------
         
         # Función descargar
-        def descargar(nombre_archivo):
+        def descargar(nombre_archivo, output):
             
             # Mensaje exitoso
             st.success("✅ File ready to download")
@@ -261,7 +261,10 @@ def main():
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",          
             )
 
-            return clicked
+            if clicked:
+                # Limpiar cache
+                st.cache_data.clear()
+                
         # ---------------------------------------------------------------------------------------------
         
         # ------------------------
@@ -287,6 +290,9 @@ def main():
 
         if "archivo_listo" not in st.session_state:
             st.session_state.archivo_listo = False
+        
+        if "último_nombre" not in st.session_state:
+            st.session_state.last_uploaded_name = None
 
         # ---------------------------------------------------------------------------------------------
     
@@ -309,6 +315,28 @@ def main():
             # ------------------------
             uploaded_file = st.file_uploader("Upload file", type=["csv", "xlsx"])
 
+            if uploaded_file is None:
+                st.session_state.df = None
+                st.session_state.last_uploaded_name = None
+                st.session_state.filter_clicked = False
+                st.session_state.df_filtrado = None
+                st.session_state.datos_excluidos = None
+                st.session_state.proceso_completo = False
+                st.session_state.archivo_listo = False
+                st.stop()
+
+            if uploaded_file is not None:
+                if uploaded_file.name != st.session_state.last_uploaded_name:
+                
+                    st.session_state.last_uploaded_name = uploaded_file.name
+                    
+                    # 🔄 reset completo
+                    st.session_state.filter_clicked = False
+                    st.session_state.df_filtrado = None
+                    st.session_state.datos_excluidos = None
+                    st.session_state.proceso_completo = False
+                    st.session_state.archivo_listo = False
+
             if uploaded_file:
                 try: 
                     if uploaded_file.name.endswith(".csv"):
@@ -321,6 +349,7 @@ def main():
                         
                     if df.empty: 
                         st.warning("⚠️ Your file is empty")
+                        st.stop()
                     else:
                         df = df.dropna(how="all")
                         st.session_state.df = df
@@ -416,19 +445,14 @@ def main():
                         output = crear_excel(df_final)
                         
                         # Guardar en session state
-                        st.session_state.output_file = output
                         st.session_state.archivo_listo = True
                         
                         # ------------------------
                         # DESCARGAR
                         # ------------------------
                         if st.session_state.archivo_listo:
-                            clicked = descargar(st.session_state.nombre_archivo)
-                            if clicked:
-                                #st.session_state.archivo_listo = False
-                                
-                                st.cache_data.clear()
-                                st.rerun()
+                            descargar(st.session_state.nombre_archivo, output)
+                            
 
         else:
 
