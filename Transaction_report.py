@@ -316,20 +316,9 @@ def main():
             # ------------------------
             uploaded_file = st.file_uploader("Upload file", type=["csv", "xlsx"])
 
-            if uploaded_file is None:
-                st.session_state.df = None
-                st.session_state.last_uploaded_name = None
-                st.session_state.filter_clicked = False
-                st.session_state.df_filtrado = None
-                st.session_state.datos_excluidos = None
-                st.session_state.proceso_completo = False
-                st.session_state.archivo_listo = False
-                st.stop()
-
             if uploaded_file is not None:
-                if uploaded_file.name != st.session_state.last_uploaded_name:
-                
-                    st.session_state.last_uploaded_name = uploaded_file.name
+                if uploaded_file != st.session_state.último_nombre:
+                    st.session_state.último_nombre = uploaded_file
                     
                     # 🔄 reset completo
                     st.session_state.filter_clicked = False
