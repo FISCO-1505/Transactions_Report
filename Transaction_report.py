@@ -82,6 +82,213 @@ def main():
     else:
         # ______________________________________ Contenido Principal ______________________________________
         
+        # Columnas necesarias
+        cols = {"Trade Date" : "Trade Date", 
+                "Family Name" : "Client", 
+                "Transaction Type" : "Transaction Type", 
+                "Net Amount Local" : "Net Amount Local",
+                "Local Currency Code" : "Local Currency Code",
+                "Local To Base FX Rate" : "Local To Base FX Rate", 
+                "Net Amount Base" : "Net Amount Base",
+                "Referencia Movimiento" : "Referencia Movimiento"} 
+        # ---------------------------------------------------------------------------------------------    
+        
+        # Función para realizar el filtro de los datos
+        def filtrar(df, cols):
+
+            # Seleccionar columnas necesarias, renombrarlas y filtrar por tipo de transacción
+            df = (df
+                [list(cols.keys())]
+                .rename(columns=cols)
+                .query("`Transaction Type` in ['Addition', 'Withdrawal of Cash']")
+            )
+
+            # Guardar datos vacíos
+            datos_vacios = df[
+                df["Referencia Movimiento"].isna() |
+                (df["Referencia Movimiento"].astype(str).str.strip() == "")]
+            
+            # Eliminar NAN de la columna Referencia Movimiento
+            df = df[df["Referencia Movimiento"].notna()]
+            
+            # Limpiar espacios a los datos de la columna Referencia Movimientos
+            df["Referencia Movimiento"] = (
+                df["Referencia Movimiento"]
+                .astype(str)
+                .str.strip()
+                .str.upper()
+            )
+            
+            # Eliminar referencias de movimientos vacías
+            df = df[df["Referencia Movimiento"] != ""]
+
+            # Excluir ciertos textos
+            mask_excluir = (
+                df["Referencia Movimiento"].str.contains(
+                    r"\b(?:debit|internal|interest|card)\b",
+                    case=False,
+                    regex=True
+                ) 
+                | df["Referencia Movimiento"].str.match(r"(?i)^(transfer)$")
+            )
+
+            # Obtener todos los datos que vamos a eexcluir
+            datos_excluidos = (pd.concat([datos_vacios, df[mask_excluir]])
+                                .sort_values(by=["Trade Date", "Client"])
+                                .reset_index(drop=True))
+            
+            datos_excluidos = datos_excluidos[['Trade Date', 
+                                            'Client', 
+                                            'Transaction Type', 
+                                            'Net Amount Local', 
+                                            'Local Currency Code', 
+                                            'Referencia Movimiento',
+                                            'Local To Base FX Rate',
+                                            'Net Amount Base']]
+
+            # Guardamos nuestra tabla filtrada
+            df = df[~mask_excluir] 
+
+            #if df.empty:
+                #return None
+
+            return df, datos_excluidos 
+        
+        # ---------------------------------------------------------------------------------------------
+        
+        # Función crear Excel
+        def crear_excel(df):
+            
+            # Ordenar los datos 
+            df = df.sort_values(by=["Trade Date", "Client"])
+            
+            # Obtener longitud de la referencia
+            ancho = (df['Referencia Movimiento']
+                    .fillna("")
+                    .astype(str)
+                    .str
+                    .len()
+                    .max()
+                    )
+            
+            # Crear archivo Excel en memoria
+            output = BytesIO()
+            workbook = xlsxwriter.Workbook(output, {'in_memory': True})
+            worksheet = workbook.add_worksheet("Filtered_data")
+            worksheet.hide_gridlines(0) 
+            
+            row = 1
+            # Iterar fechas únicas
+            for date in df['Trade Date'].unique():
+                col = 0
+                df_query = df.query("`Trade Date` == @date").copy()
+                n_rows = df_query.shape[0]
+
+                # Iterar columnas y escribirlas
+                for columnas in df_query.columns: 
+                    worksheet.write_column(row, col, df_query[columnas])
+                    col += 1
+                row = row + n_rows + 1
+
+            # Ancho de cada columna 
+            column_widths = {
+                "Trade Date": 14,
+                "Client": 12,
+                "Transaction Type": 20,
+                "Net Amount Local": 18,
+                "Local Currency Code": 11,
+                "Local To Base FX Rate": 10,
+                "Net Amount Base": 18,
+                "Referencia Movimiento": ancho+18
+            }
+
+            # Dar formatos a cada columna
+            column_formats = {
+                "Trade Date": workbook.add_format({"align": "center", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000"}),
+                "Client": workbook.add_format({"align": "left", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000"}),
+                "Transaction Type": workbook.add_format({"align": "left", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000"}),
+                "Net Amount Local": workbook.add_format({"align": "right", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000","num_format": "#,##0.00"}),
+                "Local Currency Code": workbook.add_format({"align": "center", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000"}),
+                "Local To Base FX Rate": workbook.add_format({"align": "right", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000","num_format": "0.00"}),
+                "Net Amount Base": workbook.add_format({"align": "right", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000","num_format": "#,##0.00"}),
+                "Referencia Movimiento": workbook.add_format({"align": "left", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000"})
+            } 
+                
+            # Aplicar formato y ancho por columna
+            for col_num, col_name in enumerate(df.columns):
+                # formato con alineación
+                fmt = column_formats.get(col_name)  
+                # ancho de 20 
+                width = column_widths.get(col_name, 20)  
+                worksheet.set_column(col_num, col_num, width, fmt)
+                
+            # Formato de encabezados
+            header_format = workbook.add_format({
+                "bold": True,
+                "font_name": "Lato Light",
+                "font_size": 12,
+                "align": "center",
+                "valign": "vcenter",
+                "font_color": "white",
+                "bg_color": "#0B2E4E",
+                "border": 0, 
+                "text_wrap": True
+            })
+            
+            # Escribir encabezados  
+            for col_num, column in enumerate(df.columns):
+                worksheet.write(0, col_num, column, header_format)
+                    
+            workbook.close()    
+            # Muve el cursor al inicio               
+            output.seek(0) 
+            
+            return output   
+        # ---------------------------------------------------------------------------------------------
+        
+        # Función descargar
+        def descargar(nombre_archivo):
+            
+            # Mensaje exitoso
+            st.success("✅ File ready to download")
+                
+            #Botón para descargar
+            clicked = st.download_button(
+                label="Download Excel",
+                data=st.session_state.output_file,
+                file_name=f"{nombre_archivo}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",          
+            )
+
+            return clicked
+        # ---------------------------------------------------------------------------------------------
+        
+        # ------------------------
+        # SESSION STATE
+        # ------------------------
+        if "df" not in st.session_state:
+            st.session_state.df = None
+
+        if "nombre_archivo" not in st.session_state:
+            st.session_state.nombre_archivo = None
+            
+        if "filter_clicked" not in st.session_state:
+            st.session_state.filter_clicked = False
+            
+        if "df_filtrado" not in st.session_state:
+            st.session_state.df_filtrado = None
+            
+        if "datos_excluidos" not in st.session_state:
+            st.session_state.datos_excluidos = None
+            
+        if "proceso_completo" not in st.session_state:
+            st.session_state.proceso_completo = False
+
+        if "archivo_listo" not in st.session_state:
+            st.session_state.archivo_listo = False
+
+        # ---------------------------------------------------------------------------------------------
+    
         # Insertar menú lateral
         with st.sidebar:
             # Título
@@ -93,269 +300,151 @@ def main():
                                 )
         # Ejecutar opción seleccionada
         if selection == "Generate Report":
+            st.set_page_config(page_title="Transactions Report", layout="wide")
+            st.title("🧾 Transactions Report")
 
-            # Columnas necesarias
-            cols = {"Trade Date" : "Trade Date", 
-                    "Family Name" : "Client", 
-                    "Transaction Type" : "Transaction Type", 
-                    "Net Amount Local" : "Net Amount Local",
-                    "Local Currency Code" : "Local Currency Code",
-                    "Local To Base FX Rate" : "Local To Base FX Rate", 
-                    "Net Amount Base" : "Net Amount Base",
-                    "Referencia Movimiento" : "Referencia Movimiento"} 
-            
-            # Función para realizar el filtro de los datos
-            def filtrar(df, cols):
-            
-                # Seleccionar columnas necesarias y renombrarlas
-                df = (df
-                      [list(cols.keys())]
-                      .rename(columns=cols)
-                      .query("`Transaction Type` in ['Addition', 'Withdrawal of Cash']")
-                )
-
-                # Eliminar NAN de la columna Referencia Movimiento
-                df = df[df["Referencia Movimiento"].notna()]
-                
-                # Limpiar espacios a los datos de la columna Referencia Movimientos
-                df["Referencia Movimiento"] = (
-                    df["Referencia Movimiento"]
-                    .astype(str)
-                    .str.strip()
-                    .str.upper()
-                )
-                # Eliminar referencias de movimientos vacías
-                df = df[df["Referencia Movimiento"] != ""]
-
-                # Excluir ciertos textos
-                mask_excluir = (
-                    df["Referencia Movimiento"].str.contains(
-                        r"\b(?:debit|internal|interest|card)\b",
-                        case=False,
-                        regex=True
-                    ) 
-                    | df["Referencia Movimiento"].str.match(r"(?i)^(transfer)$")
-                )
-
-                # Guardamos nuestra tabla filtrada
-                df = df[~mask_excluir] 
-
-                # Ordenar los datos 
-                df = df.sort_values(by=["Trade Date", "Client"])
-
-                return df
-            
-            # Titulo 
-            st.title("Transactions Report")
-
-            # Subir archivo tipo CSV o XLSX
+            # ------------------------
+            # SUBIR ARCHIVO
+            # ------------------------
             uploaded_file = st.file_uploader("Upload file", type=["csv", "xlsx"])
 
-            # Creamos un DataFrame sin valores
-            df = None
-
             if uploaded_file:
-
-                # Variable que guarda el tipo de archivo
-                file_type = uploaded_file.name.split(".")[-1].lower()
-
-                # Leer el archivo y sustituye lo que había en df
-                if file_type == "csv":
-                    df = pd.read_csv(uploaded_file, sep=None, engine="python")
-                else:
-                    df = pd.read_excel(uploaded_file)
-                    # Aplicar formato a la columna de fecha
-                    df["Trade Date"] = df["Trade Date"].dt.strftime("%#d/%#m/%Y")
-
-                # Mensaje exitoso
-                st.success("File uploaded successfully") 
-                
-            if df is not None: 
-
-                # Obtener fecha minima y máxima
-                fecha_min = df['Trade Date'].min()
-                fecha_max = df['Trade Date'].max()
-
-                # Nombre por default 
-                if fecha_min == fecha_max:
-                    default_name = f"Transactions_{fecha_min}"
-                else:
-                    default_name = f"Transactions_{fecha_min}-{fecha_max}"
-    
-                # Definir el valor inicial en session_state de archivo_listo y de nombre_archivo si no existen
-                if "archivo_listo" not in st.session_state:
-                    st.session_state.archivo_listo = False
-                if "nombre_archivo" not in st.session_state:
-                    st.session_state.nombre_archivo = default_name 
-
-                # ----- Boón para filtrar ----    
+                try: 
+                    if uploaded_file.name.endswith(".csv"):
+                        try:
+                            df = pd.read_csv(uploaded_file)
+                        except:
+                            df = pd.read_csv(uploaded_file, sep=None, engine="python")
+                    else: 
+                        df = pd.read_excel(uploaded_file)
+                        
+                    if df.empty: 
+                        st.warning("⚠️ Your file is empty")
+                    else:
+                        df = df.dropna(how="all")
+                        st.session_state.df = df
+                        st.success("✅ File uploaded successfully")
+                        
+                        file_type = uploaded_file.name.split(".")[-1].lower()
+                        if file_type == "xlsx":
+                            df["Trade Date"] = df["Trade Date"].dt.strftime("%#d/%#m/%Y")
+                        fecha_min = df["Trade Date"].min()
+                        fecha_max = df["Trade Date"].max()
+                        # Nombre por default 
+                        if fecha_min == fecha_max:
+                            nombre_archivo = f"Report_{fecha_min}"
+                        else:
+                            nombre_archivo = f"Report_{fecha_min}-{fecha_max}"
+                        st.session_state.nombre_archivo = nombre_archivo
+                except Exception as e:
+                    st.error(f"Error reading the file: {e}")
+            # ------------------------
+            # BOTÓN FILTRAR
+            # ------------------------  
+            if st.session_state.df is not None:
                 if st.button("Filter file"):
-
+                    st.session_state.filter_clicked = True
+                    
+                if st.session_state.filter_clicked:
+                    df = st.session_state.df.copy() 
+                    
                     # Quitar espacios en los nombres de las columnas
                     df.columns = df.columns.str.strip().str.replace(r"\s+", " ", regex=True)
                     # Columnas necesarias para poder filtrar
                     required_cols = set(cols.keys())
                     # Columnas faltantes
                     missing_cols = required_cols - set(df.columns)
-
+                    
+                    filtro = df['Transaction Type'].dropna().str.lower()
+                    entradas = filtro.str.contains("addition").any()
+                    salidas = filtro.str.contains("withdrawal of cash").any()
+            
                     # Enviar mensajes de error si faltan columnas para realizar el filtro
                     if missing_cols:
-
                         st.error("❌ The file doesn't contain all the necessary columns")
-                        st.write("The following columns are missing:")
+                        st.info("The following columns are missing:")
                         for col in missing_cols:
                             # Mostrar cuales son las columnas que faltan
                             st.write(f"- {col}")
-
+                        st.stop()
+                    if not entradas and not salidas:
+                        st.warning("⚠️ There's not  Addition and Withdrawal of Cash")
+                        st.stop()
+                    
+                    # FILTRAR
+                    df_filtrado, datos_excluidos = filtrar(df, cols)
+                    st.session_state.df_filtrado = df_filtrado 
+                    st.session_state.datos_excluidos = datos_excluidos
+                    st.session_state.proceso_completo = True 
+                    
+                    if df_filtrado.empty:
+                        st.warning("⚠️ All transactions are debit, interest, or internal")
                     else:
-                        # Realizar el filtro
-                        df_filtrado = filtrar(df, cols)
-
-                        # Obtener longitud de la referencia
-                        ancho = df_filtrado['Referencia Movimiento'].str.len().max()
+                        st.success("✅ File filtered successfully") 
                     
-                        # Crear archivo Excel en memoria
-                        output = BytesIO()
-                        workbook = xlsxwriter.Workbook(output, {'in_memory': True})
-                        worksheet = workbook.add_worksheet("Filtered_data")
-                        worksheet.hide_gridlines(0) #2
+            # ------------------------
+            # MOSTRAR ELIMINADOS
+            # ------------------------  
+            if st.session_state.proceso_completo:
+                datos_excluidos = st.session_state.datos_excluidos.copy() 
+                st.info(f"🗑️ Data to delete: {len(datos_excluidos)}")
                 
-                        row = 1
-                        # Iterar fechas únicas
-                        for date in df_filtrado['Trade Date'].unique():
-                            col = 0
-                            df_query = df_filtrado.query("`Trade Date` == @date").copy()
-                            n_rows = df_query.shape[0]
-
-                            # Iterar columnas y escribirlas
-                            for cols in df_query.columns:
-                                worksheet.write_column(row, col, df_query[cols])
-                                col += 1
-                            row = row + n_rows + 1
-
-                        # Ancho de cada columna 
-                        column_widths = {
-                            "Trade Date": 14,
-                            "Client": 12,
-                            "Transaction Type": 20,
-                            "Net Amount Local": 18,
-                            "Local Currency Code": 11,
-                            "Local To Base FX Rate": 10,
-                            "Net Amount Base": 18,
-                            "Referencia Movimiento": ancho+18
-                        }
-
-                        # Dar formatos a cada columna
-                        column_formats = {
-                            "Trade Date": workbook.add_format({"align": "center", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000"}),
-                            "Client": workbook.add_format({"align": "left", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000"}),
-                            "Transaction Type": workbook.add_format({"align": "left", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000"}),
-                            "Net Amount Local": workbook.add_format({"align": "right", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000","num_format": "#,##0.00"}),
-                            "Local Currency Code": workbook.add_format({"align": "center", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000"}),
-                            "Local To Base FX Rate": workbook.add_format({"align": "right", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000","num_format": "0.00"}),
-                            "Net Amount Base": workbook.add_format({"align": "right", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000","num_format": "#,##0.00"}),
-                            "Referencia Movimiento": workbook.add_format({"align": "left", "valign": "vcenter", "font_name": "Lato Light", "font_size": 11, "font_color": "#000000"})
-                        } 
-                            
-                        # Aplicar formato y ancho por columna
-                        for col_num, col_name in enumerate(df_filtrado.columns):
-                            # formato con alineación
-                            fmt = column_formats.get(col_name)  
-                            # ancho de 20 
-                            width = column_widths.get(col_name, 20)  
-                            worksheet.set_column(col_num, col_num, width, fmt)
-                            
-                        # Formato de encabezados
-                        header_format = workbook.add_format({
-                            "bold": True,
-                            "font_name": "Lato Light",
-                            "font_size": 12,
-                            "align": "center",
-                            "valign": "vcenter",
-                            "font_color": "white",
-                            "bg_color": "#0B2E4E",
-                            "border": 0, 
-                            "text_wrap": True
-                        })
+                if not datos_excluidos.empty:
+                    if "Select" not in datos_excluidos.columns:
+                        df_display = datos_excluidos.copy()
+                        df_display.insert(0,"Select", False)
+                        edited_df = st.data_editor(
+                            df_display,
+                            column_config={
+                                "Select": st.column_config.CheckboxColumn("Select")
+                                },
+                                use_container_width = True
+                            )
+                        toggle = st.toggle("Add selected data")
+                        df_final = st.session_state.df_filtrado.copy()
                         
-                        # Escribir encabezados  
-                        for col_num, column in enumerate(df_filtrado.columns):
-                            worksheet.write(0, col_num, column, header_format)
+                        if toggle:
+                            seleccionados = edited_df[edited_df["Select"] == True]
+                            df_final = pd.concat([df_final, seleccionados.drop(columns=["Select"])])
+                            st.info(f"{len(seleccionados)} data were added")
+                        else:
+                            st.info("No data was added")
+                        # ------------------------
+                        # CREAR EXCEL
+                        # ------------------------
+                        output = crear_excel(df_final)
+                        
+                        # Guardar en session state
+                        st.session_state.output_file = output
+                        st.session_state.archivo_listo = True
+                        
+                        # ------------------------
+                        # DESCARGAR
+                        # ------------------------
+                        if st.session_state.archivo_listo:
+                            clicked = descargar(st.session_state.nombre_archivo)
+                            if clicked:
+                                st.session_state.archivo_listo = False
                                 
-                        workbook.close()    
-                        # Muve el cursor al inicio               
-                        output.seek(0)
+                                st.cache_data.clear()
+                                st.rerun()
 
-                    # Guardar archivo en session_state
-                    st.session_state.output_file = output
-                    st.session_state.archivo_listo = True
-
-                if st.session_state.archivo_listo:
-                    # Mensaje listo para descargar
-                    st.success("✅ File ready to download") 
-
-                    # Input editable
-                    st.session_state.nombre_archivo = st.text_input(
-                        "File name", 
-                        value = st.session_state.nombre_archivo
-                     )
-                    
-                    # Nombre del archivo guardado en session_sate, en caso de ser vacío guarda el nombre Report 
-                    nombre_archivo = st.session_state.nombre_archivo.strip() or "Report"
-                        
-                    # Botón para descargar
-                    clicked = st.download_button(
-                        label="Download Excel",
-                        data=st.session_state.output_file,
-                        file_name=f"{nombre_archivo}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",          
-                    )
-
-                    if clicked:
-                        # Variables archivo_listo y nombre_archivo a default
-                        st.session_state.archivo_listo = False 
-                        st.session_state.nombre_archivo = default_name
-
-                        # Clear cache
-                        st.cache_data.clear()
-                        st.cache_resource.clear()
-
-                        # Forzar rerun
-                        st.rerun()
-                    
         else:
-             # Cargar imagen
-             images.imagen_home("Advisors") 
-
-             # Instrucciones
-             st.header("Instructions")
-             st.info("Follow the steps carefully to complete the process")
-             st.markdown("""
-                1. Click the **Generate Report** button.
-                2. Drag or upload the .csv or .xlsx file you want to filter, you will see the message""")
-             st.success("File uploaded successfully")  
-             st.markdown(""" 
-                3. Click the **Filter file** button.""")
-             st.markdown("""            
-                   If necessary columns are missing, you will see the message:""")
-             st.error("❌ The file doesn't contain all the necessary columns. The following columns are missing:")
-             st.markdown("""              
-                In that case, you should review the file and upload it again, making sure it contains the necessary columns.""")
-             st.markdown(""" 
-                If the file has the necessary columns to perform the filter, you will see the message:""")
-             st.success("✅ File ready to download") 
-             st.markdown("""
-                4. Enter the name you want to use to save the filtered file. 
-                5. **Press Enter** to apply. """)  
-             st.warning("If you don't press Enter, the name change won't be applied.")
-             st.markdown("""                            
-                6. Click the Download Excel button.""")  
-             st.warning("Don't close the page during the download.")
-             st.markdown("""            
-                7. Click Save As and choose the folder.
-                8. Log out and close the window.
-                         """)           
-
+            # Instrucciones
+            st.header("Instructions")
+            st.info("Follow the steps carefully to complete the process")
+            st.markdown("""
+            1. Click the **Generate Report** button.
+            2. Drag or upload the .csv or .xlsx file you want to filter.
+            3. Click the **Filter file** button.
+            4. Click the checkbox in the Select column to add data.
+            5. Click the **Add selected data** if necessary.                           
+            6. Click the Download Excel button.""")  
+            st.warning("Don't close the page during the download.")
+            st.markdown("""            
+            7. Click Save As and choose the folder.
+            8. Log out and close the window.
+                        """)           
         # Botón cerrar sesión
         if st.sidebar.button("Log out"):
             st.cache_data.clear()
