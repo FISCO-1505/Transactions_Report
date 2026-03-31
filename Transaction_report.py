@@ -304,6 +304,13 @@ def main():
                                  options=["Home", "Generate Report"],
                                  default="Home"
                                 )
+        # Botón cerrar sesión
+        if st.sidebar.button("Log out"):
+            st.cache_data.clear()
+            st.toast("Caché eliminada")
+            st.session_state["pswd"] = False
+            st.rerun()
+            
         # Ejecutar opción seleccionada
         if selection == "Generate Report":
             #st.set_page_config(page_title="Transactions Report", layout="wide")
@@ -471,12 +478,7 @@ def main():
             7. Click Save As and choose the folder.
             8. Log out and close the window.
                         """)           
-        # Botón cerrar sesión
-        if st.sidebar.button("Log out"):
-            st.cache_data.clear()
-            st.toast("Caché eliminada")
-            st.session_state["pswd"] = False
-            st.rerun()
+        
         
 if __name__ == "__main__":
     main()
