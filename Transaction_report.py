@@ -448,8 +448,11 @@ def main():
                         # ------------------------
                         # DESCARGAR
                         # ------------------------
-                        if st.session_state.archivo_listo:
-                            descargar(st.session_state.nombre_archivo, output)
+                        if not df_final.empty: 
+                            if st.session_state.archivo_listo:
+                                descargar(st.session_state.nombre_archivo, output)
+                        else:
+                            st.warning("⚠️ The file is empty")
 
                 if uploaded_file is None and "df" in st.session_state:
                     for key in list(st.session_state.keys()):
