@@ -294,6 +294,9 @@ def main():
         
         if "last_file" not in st.session_state:
             st.session_state.last_file = None
+        
+        if "last_file" not in st.session_state:
+            st.session_state.last_file = None
 
         # ---------------------------------------------------------------------------------------------
     
@@ -314,7 +317,12 @@ def main():
             # ------------------------
             # SUBIR ARCHIVO
             # ------------------------
-            uploaded_file = st.file_uploader("Upload file", type=["csv", "xlsx"])
+            uploaded_file = st.file_uploader("Upload file", type=["csv", "xlsx"],key="file")
+
+            if uploaded_file is None:
+                st.session_state.pop("filter_clicked", None)
+                st.session_state.pop("df", None)
+                st.stop()
 
             if uploaded_file is not None:
                 if uploaded_file != st.session_state.last_file:
@@ -442,6 +450,11 @@ def main():
                         # ------------------------
                         if st.session_state.archivo_listo:
                             descargar(st.session_state.nombre_archivo, output)
+
+                if uploaded_file is None and "df" in st.session_state:
+                    for key in list(st.session_state.keys()):
+                        del st.session_state[key]
+                    st.rerun()
                             
 
         else:
