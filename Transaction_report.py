@@ -84,25 +84,23 @@ def main():
         # ______________________________________ Contenido Principal ______________________________________
         
         # Columnas necesarias
-        cols = {"Trade Date" : "Trade Date", 
-                "Family Name" : "Client", 
-                "Transaction Type" : "Transaction Type", 
-                "Net Amount Local" : "Net Amount Local",
-                "Local Currency Code" : "Local Currency Code",
-                "Local To Base FX Rate" : "Local To Base FX Rate", 
-                "Net Amount Base" : "Net Amount Base",
-                "Referencia Movimiento" : "Referencia Movimiento"} 
+        cols = ["Trade Date",
+                "Family Name",
+                "Transaction Type",
+                "Net Amount Local",
+                "Local Currency Code",
+                "Local To Base FX Rate",
+                "Net Amount Base",
+                "Referencia Movimiento"]
         # ---------------------------------------------------------------------------------------------    
         
         # Función para realizar el filtro de los datos
         def filtrar(df, cols):
 
             # Seleccionar columnas necesarias, renombrarlas y filtrar por tipo de transacción
-            df = (df
-                [list(cols.keys())]
-                .rename(columns=cols)
+            df = (df[cols].rename(columns={"Family Name" : "Client"}, inplace=False)
                 .query("`Transaction Type` in ['Addition', 'Withdrawal of Cash']")
-            )
+                )
 
             # Guardar datos vacíos
             datos_vacios = df[
@@ -294,9 +292,6 @@ def main():
         
         if "last_file" not in st.session_state:
             st.session_state.last_file = None
-        
-        if "last_file" not in st.session_state:
-            st.session_state.last_file = None
 
         # ---------------------------------------------------------------------------------------------
     
@@ -328,7 +323,7 @@ def main():
                 if uploaded_file != st.session_state.last_file:
                     st.session_state.last_file = uploaded_file
                     
-                    # 🔄 reset completo
+                    # Reset completo
                     st.session_state.filter_clicked = False
                     st.session_state.df_filtrado = None
                     st.session_state.datos_excluidos = None
@@ -352,9 +347,8 @@ def main():
                         df = df.dropna(how="all")
                         st.session_state.df = df
                         st.success("✅ File uploaded successfully")
-                        
-                        file_type = uploaded_file.name.split(".")[-1].lower()
-                        if file_type == "xlsx":
+                    
+                        if uploaded_file.name.endswith(".xlsx"):
                             df["Trade Date"] = df["Trade Date"].dt.strftime("%#d/%#m/%Y")
                         fecha_min = df["Trade Date"].min()
                         fecha_max = df["Trade Date"].max()
@@ -378,10 +372,9 @@ def main():
                     
                     # Quitar espacios en los nombres de las columnas
                     df.columns = df.columns.str.strip().str.replace(r"\s+", " ", regex=True)
-                    # Columnas necesarias para poder filtrar
-                    required_cols = set(cols.keys())
+                    
                     # Columnas faltantes
-                    missing_cols = required_cols - set(df.columns)
+                    missing_cols = set(cols) - set(df.columns)
                     
                     filtro = df['Transaction Type'].dropna().str.lower()
                     entradas = filtro.str.contains("addition").any()
