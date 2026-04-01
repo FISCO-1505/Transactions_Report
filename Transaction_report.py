@@ -356,7 +356,15 @@ def main():
                         st.success("✅ File uploaded successfully")
                     
                         if uploaded_file.name.endswith(".xlsx"):
-                            df["Trade Date"] = df["Trade Date"].dt.strftime("%#d/%#m/%Y")
+                            df["Trade Date"] = pd.to_datetime(df["Trade Date"])
+
+                            df["Trade Date"] = (
+                                df["Trade Date"].dt.day.astype(str) + '/' +
+                                df["Trade Date"].dt.month.astype(str) + '/' +
+                                df["Trade Date"].dt.year.astype(str)
+                            )
+                            #st.write(df)
+                            #df["Trade Date"] = df["Trade Date"].dt.strftime("%#d/%#m/%Y")
                         fecha_min = df["Trade Date"].min()
                         fecha_max = df["Trade Date"].max()
                         # Nombre por default 
