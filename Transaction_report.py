@@ -348,7 +348,7 @@ def main():
                         df = pd.read_excel(uploaded_file)
                         
                     if df.empty: 
-                        st.warning("⚠️ Your file is empty")
+                        st.warning("⚠️ The file is empty")
                         st.stop()
                     else:
                         df = df.dropna(how="all")
@@ -404,7 +404,7 @@ def main():
                             st.write(f"- {col}")
                         st.stop()
                     if not entradas and not salidas:
-                        st.warning("⚠️ There's not  Addition and Withdrawal of Cash")
+                        st.warning("⚠️ There's not Addition nor Withdrawal of Cash")
                         st.stop()
                     
                     # FILTRAR
