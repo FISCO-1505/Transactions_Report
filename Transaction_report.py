@@ -433,6 +433,7 @@ def main():
                         df_display.insert(0,"Select", False)
                         edited_df = st.data_editor(
                             df_display,
+                            hide_index = True,
                             column_config={
                                 "Select": st.column_config.CheckboxColumn("Select")
                                 },
