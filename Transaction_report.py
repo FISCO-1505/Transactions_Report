@@ -385,16 +385,7 @@ def main():
                             df["Trade Date"].dt.month.astype(str) + '/' +
                             df["Trade Date"].dt.year.astype(str)
                         )
-                        #st.write(df)
-                        #df["Trade Date"] = df["Trade Date"].dt.strftime("%#d/%#m/%Y")
-                    fecha_min = df["Trade Date"].min()
-                    fecha_max = df["Trade Date"].max()
-                    # Nombre por default 
-                    if fecha_min == fecha_max:
-                        nombre_archivo = f"Report_{fecha_min}"
-                    else:
-                        nombre_archivo = f"Report_{fecha_min}-{fecha_max}"
-                    st.session_state.nombre_archivo = nombre_archivo
+                        
                 except Exception as e:
                     st.error(f"Error reading the file: {e}")
             # ------------------------
@@ -460,6 +451,14 @@ def main():
                         # DESCARGAR
                         # ------------------------
                         if not df_final.empty: 
+                            fecha_min = df_final["Trade Date"].min()
+                            fecha_max = df_final["Trade Date"].max()
+                            # Nombre por default 
+                            if fecha_min == fecha_max:
+                                nombre_archivo = f"Report_{fecha_min}"
+                            else:
+                                nombre_archivo = f"Report_{fecha_min}-{fecha_max}"
+                            st.session_state.nombre_archivo = nombre_archivo
                             if st.session_state.archivo_listo:
                                 descargar(st.session_state.nombre_archivo, output)
                         else:
