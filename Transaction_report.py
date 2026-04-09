@@ -4,59 +4,8 @@ Created on Thu Mar  5 15:32:54 2026
 
 @author: elizabeth.cervantes
 """
-
+import bootstrap #Carga la libreria de FISCO_Sources, siempre ponerlo
 import streamlit as st
-import subprocess
-import sys
-import os
-
-def ensure_private_lib():
-    # Si existe /home/adminuser, estamos en Streamlit Cloud
-    is_cloud = os.path.exists("/home/adminuser")
-    
-    if is_cloud:
-        # En la nube usamos /tmp para evitar problemas de permisos de escritura
-        local_lib_path = "/tmp/fisco_vendor"
-    else:
-        # En local usamos la carpeta vendor en el directorio actual
-        local_lib_path = os.path.join(os.getcwd(), "vendor")
-
-    # Asegurar que la ruta exista
-    if not os.path.exists(local_lib_path):
-        os.makedirs(local_lib_path)
-    
-    if local_lib_path not in sys.path:
-        # Insertamos al inicio para dar prioridad a nuestra librería
-        sys.path.insert(0, local_lib_path)
-
-    try:
-        import FISCO_Sources
-    except ImportError:
-        # REVISAR POSIBLE EXPIRACIÓN DEL TOKEN
-        if "GITHUB_TOKEN" in st.secrets:
-            token = st.secrets["GITHUB_TOKEN"]
-            repo_url = f"git+https://{token}@github.com/FISCO-1505/Finaccess_Resources.git"
-            
-            with st.spinner("Configuring resources..."):
-                try:
-                    subprocess.check_call([
-                        sys.executable, "-m", "pip", 
-                        "install", "--target", local_lib_path, 
-                        repo_url
-                    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-                    st.success("Resources configured correctly.")
-                    import FISCO_Sources
-                except Exception as e:
-                    st.error(f"Critical error: The library could not be installed.")
-                    st.stop()
-        else:
-            st.error("GITHUB_TOKEN was not found in Streamlit's Secrets.")
-            st.stop()
-
-# Ejecutar la función
-ensure_private_lib()
-
 import pandas as pd
 from io import BytesIO
 import xlsxwriter
@@ -238,256 +187,504 @@ def descargar(nombre_archivo, output):
         st.cache_data.clear()
         
 # ---------------------------------------------------------------------------------------------
+def contenido_principal():
+
+    # Columnas necesarias
+    cols = ["Trade Date",
+            "Family Name",
+            "Transaction Type",
+            "Net Amount Local",
+            "Local Currency Code",
+            "Local To Base FX Rate",
+            "Net Amount Base",
+            "Referencia Movimiento"]
+    
+    # ------------------------
+    # SESSION STATE
+    # ------------------------
+    if "df" not in st.session_state:
+        st.session_state.df = None
+
+    if "nombre_archivo" not in st.session_state:
+        st.session_state.nombre_archivo = None
+        
+    if "filter_clicked" not in st.session_state:
+        st.session_state.filter_clicked = False
+        
+    if "df_filtrado" not in st.session_state:
+        st.session_state.df_filtrado = None
+        
+    if "datos_excluidos" not in st.session_state:
+        st.session_state.datos_excluidos = None
+        
+    if "proceso_completo" not in st.session_state:
+        st.session_state.proceso_completo = False
+
+    if "archivo_listo" not in st.session_state:
+        st.session_state.archivo_listo = False
+    
+    if "last_file" not in st.session_state:
+        st.session_state.last_file = None
+
+    # ---------------------------------------------------------------------------------------------
+
+    # Insertar menú lateral
+    with st.sidebar:
+        # Título
+        st.title(":blue[Select an option]")
+        # Pills Options
+        selection = st.pills(label="Options", label_visibility="collapsed",
+                                options=["Home", "Generate Report"],
+                                default="Home"
+                            )
+    # # Botón cerrar sesión
+    # if st.sidebar.button("Log out"):
+    #     st.cache_data.clear()
+    #     st.toast("Caché eliminada")
+    #     st.session_state["pswd"] = False
+    #     st.rerun()
+        
+    # Ejecutar opción seleccionada
+    if selection == "Generate Report":
+        #st.set_page_config(page_title="Transactions Report", layout="wide")
+        st.title("🧾 Transactions Report")
+
+        # ------------------------
+        # SUBIR ARCHIVO
+        # ------------------------
+        uploaded_file = st.file_uploader("Upload file", type=["csv", "xlsx"],key="file")
+
+        if uploaded_file is None:
+            st.session_state.pop("filter_clicked", None)
+            st.session_state.pop("df", None)
+            st.stop()
+
+        if uploaded_file is not None:
+            if uploaded_file != st.session_state.last_file:
+                st.session_state.last_file = uploaded_file
+                
+                # Reset completo
+                st.session_state.filter_clicked = False
+                st.session_state.df_filtrado = None
+                st.session_state.datos_excluidos = None
+                st.session_state.proceso_completo = False
+                st.session_state.archivo_listo = False
+
+        if uploaded_file:
+            try: 
+                if uploaded_file.name.endswith(".csv"):
+                    try:
+                        df = pd.read_csv(uploaded_file)
+                    except:
+                        df = pd.read_csv(uploaded_file, sep=None, engine="python")
+                else: 
+                    df = pd.read_excel(uploaded_file)
+                    
+                if df.empty: 
+                    st.warning("⚠️ The file is empty")
+                    st.stop()
+                
+                else: 
+                    # Quitar espacios en los nombres de las columnas
+                    df.columns = df.columns.str.strip().str.replace(r"\s+", " ", regex=True)
+                
+                    # Columnas faltantes
+                    missing_cols = set(cols) - set(df.columns)
+                
+                    filtro = df['Transaction Type'].dropna().str.lower()
+                    entradas = filtro.str.contains("addition").any()
+                    salidas = filtro.str.contains("withdrawal of cash").any()
+        
+                    # Enviar mensajes de error si faltan columnas para realizar el filtro
+                    if missing_cols:
+                        st.error("❌ The file doesn't contain all the necessary columns")
+                        st.info("The following columns are missing:")
+                        for col in missing_cols:
+                            # Mostrar cuales son las columnas que faltan
+                            st.write(f"- {col}")
+                        st.stop()
+                    if not entradas and not salidas:
+                        st.warning("⚠️ There's not Addition nor Withdrawal of Cash")
+                        st.stop()
+                
+                df = df.dropna(how="all")
+                st.session_state.df = df
+                st.success("✅ File uploaded successfully")
+            
+                if uploaded_file.name.endswith(".xlsx"):
+                    df["Trade Date"] = pd.to_datetime(df["Trade Date"])
+
+                    df["Trade Date"] = (
+                        df["Trade Date"].dt.day.astype(str) + '/' +
+                        df["Trade Date"].dt.month.astype(str) + '/' +
+                        df["Trade Date"].dt.year.astype(str)
+                    )
+                    
+            except Exception as e:
+                st.error(f"Error reading the file: {e}")
+        # ------------------------
+        # BOTÓN FILTRAR
+        # ------------------------  
+        if st.session_state.df is not None:
+            if st.button("Filter file"):
+                st.session_state.filter_clicked = True
+                
+            if st.session_state.filter_clicked:
+                df = st.session_state.df.copy() 
+                
+                
+                
+                # FILTRAR
+                df_filtrado, datos_excluidos = filtrar(df, cols)
+                st.session_state.df_filtrado = df_filtrado 
+                st.session_state.datos_excluidos = datos_excluidos
+                st.session_state.proceso_completo = True 
+                
+                if df_filtrado.empty:
+                    st.warning("⚠️ All transactions are debit, interest, or internal")
+                else:
+                    st.success("✅ File filtered successfully") 
+                
+        # ------------------------
+        # MOSTRAR ELIMINADOS
+        # ------------------------  
+        if st.session_state.proceso_completo:
+            datos_excluidos = st.session_state.datos_excluidos.copy() 
+            st.info(f"🗑️ Data to delete: {len(datos_excluidos)}")
+            
+            if not datos_excluidos.empty:
+                if "Select" not in datos_excluidos.columns:
+                    df_display = datos_excluidos.copy()
+                    df_display.insert(0,"Select", False)
+                    edited_df = st.data_editor(
+                        df_display,
+                        hide_index = True,
+                        column_config={
+                            "Select": st.column_config.CheckboxColumn("Select")
+                            },
+                            width = "stretch"
+                        )
+                    toggle = st.toggle("Add selected data")
+                    df_final = st.session_state.df_filtrado.copy()
+                    
+                    if toggle:
+                        seleccionados = edited_df[edited_df["Select"] == True]
+                        df_final = pd.concat([df_final, seleccionados.drop(columns=["Select"])])
+                        st.info(f"{len(seleccionados)} data were added")
+                    else:
+                        st.info("No data was added")
+                    # ------------------------
+                    # CREAR EXCEL
+                    # ------------------------
+                    output = crear_excel(df_final)
+                    
+                    # Guardar en session state
+                    st.session_state.archivo_listo = True
+                    
+                    # ------------------------
+                    # DESCARGAR
+                    # ------------------------
+                    if not df_final.empty: 
+                        fecha_min = df_final["Trade Date"].min()
+                        fecha_max = df_final["Trade Date"].max()
+                        # Nombre por default 
+                        if fecha_min == fecha_max:
+                            nombre_archivo = f"Report_{fecha_min}"
+                        else:
+                            nombre_archivo = f"Report_{fecha_min}-{fecha_max}"
+                        st.session_state.nombre_archivo = nombre_archivo
+                        if st.session_state.archivo_listo:
+                            descargar(st.session_state.nombre_archivo, output)
+                    else:
+                        st.warning("⚠️ The file is empty")
+
+            if uploaded_file is None and "df" in st.session_state:
+                for key in list(st.session_state.keys()):
+                    del st.session_state[key]
+                st.rerun()
+                        
+
+    else:
+
+        images.imagen_home("Advisors")
+        # Instrucciones
+        st.header("Instructions")
+        st.info("Follow the steps carefully to complete the process")
+        st.markdown("""
+        1. Click the **Generate Report** button.
+        2. Drag or upload the .csv or .xlsx file you want to filter.
+        3. Click the **Filter file** button.
+        4. Click the checkbox in the Select column to add data.
+        5. Click the **Add selected data** if necessary.                           
+        6. Click the Download Excel button.""")  
+        st.warning("Don't close the page during the download.")
+        st.markdown("""            
+        7. Click Save As and choose the folder.
+        8. Log out and close the window.
+                    """)           
+
 
 def main():
-    
     # Obtener ruta del archivo
     global ruta_base
     ruta_base = Path(__file__).resolve().parent
 
-    # Llamada a tu librería para validar acceso
-    acceso_concedido = auth.verificar_acceso(st.secrets["PSW_STREAMLIT"], crypto,"EN")
+    auth.gestionar_sesion_segura(
+        contenido_principal_func = contenido_principal,
+        password_secreta = st.secrets["PSW_STREAMLIT"],
+        idioma = "EN",
+        timeout_segundos = 600 #10 min
+    )
 
-    if not acceso_concedido:
-        # Aquí puedes poner un mensaje opcional o dejarlo en blanco
-        st.info("Please log in via the side menu to continue.")
-
-    else:
-        # ______________________________________ Contenido Principal ______________________________________
-        
-        # Columnas necesarias
-        cols = ["Trade Date",
-                "Family Name",
-                "Transaction Type",
-                "Net Amount Local",
-                "Local Currency Code",
-                "Local To Base FX Rate",
-                "Net Amount Base",
-                "Referencia Movimiento"]
-        
-        # ------------------------
-        # SESSION STATE
-        # ------------------------
-        if "df" not in st.session_state:
-            st.session_state.df = None
-
-        if "nombre_archivo" not in st.session_state:
-            st.session_state.nombre_archivo = None
-            
-        if "filter_clicked" not in st.session_state:
-            st.session_state.filter_clicked = False
-            
-        if "df_filtrado" not in st.session_state:
-            st.session_state.df_filtrado = None
-            
-        if "datos_excluidos" not in st.session_state:
-            st.session_state.datos_excluidos = None
-            
-        if "proceso_completo" not in st.session_state:
-            st.session_state.proceso_completo = False
-
-        if "archivo_listo" not in st.session_state:
-            st.session_state.archivo_listo = False
-        
-        if "last_file" not in st.session_state:
-            st.session_state.last_file = None
-
-        # ---------------------------------------------------------------------------------------------
+# def main():
     
-        # Insertar menú lateral
-        with st.sidebar:
-            # Título
-            st.title(":blue[Select an option]")
-            # Pills Options
-            selection = st.pills(label="Options", label_visibility="collapsed",
-                                 options=["Home", "Generate Report"],
-                                 default="Home"
-                                )
-        # Botón cerrar sesión
-        if st.sidebar.button("Log out"):
-            st.cache_data.clear()
-            st.toast("Caché eliminada")
-            st.session_state["pswd"] = False
-            st.rerun()
+#     # Obtener ruta del archivo
+#     global ruta_base
+#     ruta_base = Path(__file__).resolve().parent
+
+#     # Llamada a tu librería para validar acceso
+#     acceso_concedido = auth.verificar_acceso(st.secrets["PSW_STREAMLIT"], crypto,"EN")
+
+#     if not acceso_concedido:
+#         # Aquí puedes poner un mensaje opcional o dejarlo en blanco
+#         st.info("Please log in via the side menu to continue.")
+
+#     else:
+#         # ______________________________________ Contenido Principal ______________________________________
+        
+#         # # Columnas necesarias
+#         # cols = ["Trade Date",
+#         #         "Family Name",
+#         #         "Transaction Type",
+#         #         "Net Amount Local",
+#         #         "Local Currency Code",
+#         #         "Local To Base FX Rate",
+#         #         "Net Amount Base",
+#         #         "Referencia Movimiento"]
+        
+#         # # ------------------------
+#         # # SESSION STATE
+#         # # ------------------------
+#         # if "df" not in st.session_state:
+#         #     st.session_state.df = None
+
+#         # if "nombre_archivo" not in st.session_state:
+#         #     st.session_state.nombre_archivo = None
             
-        # Ejecutar opción seleccionada
-        if selection == "Generate Report":
-            #st.set_page_config(page_title="Transactions Report", layout="wide")
-            st.title("🧾 Transactions Report")
-
-            # ------------------------
-            # SUBIR ARCHIVO
-            # ------------------------
-            uploaded_file = st.file_uploader("Upload file", type=["csv", "xlsx"],key="file")
-
-            if uploaded_file is None:
-                st.session_state.pop("filter_clicked", None)
-                st.session_state.pop("df", None)
-                st.stop()
-
-            if uploaded_file is not None:
-                if uploaded_file != st.session_state.last_file:
-                    st.session_state.last_file = uploaded_file
-                    
-                    # Reset completo
-                    st.session_state.filter_clicked = False
-                    st.session_state.df_filtrado = None
-                    st.session_state.datos_excluidos = None
-                    st.session_state.proceso_completo = False
-                    st.session_state.archivo_listo = False
-
-            if uploaded_file:
-                try: 
-                    if uploaded_file.name.endswith(".csv"):
-                        try:
-                            df = pd.read_csv(uploaded_file)
-                        except:
-                            df = pd.read_csv(uploaded_file, sep=None, engine="python")
-                    else: 
-                        df = pd.read_excel(uploaded_file)
-                        
-                    if df.empty: 
-                        st.warning("⚠️ The file is empty")
-                        st.stop()
-                    
-                    else: 
-                        # Quitar espacios en los nombres de las columnas
-                        df.columns = df.columns.str.strip().str.replace(r"\s+", " ", regex=True)
-                    
-                        # Columnas faltantes
-                        missing_cols = set(cols) - set(df.columns)
-                    
-                        filtro = df['Transaction Type'].dropna().str.lower()
-                        entradas = filtro.str.contains("addition").any()
-                        salidas = filtro.str.contains("withdrawal of cash").any()
+#         # if "filter_clicked" not in st.session_state:
+#         #     st.session_state.filter_clicked = False
             
-                        # Enviar mensajes de error si faltan columnas para realizar el filtro
-                        if missing_cols:
-                            st.error("❌ The file doesn't contain all the necessary columns")
-                            st.info("The following columns are missing:")
-                            for col in missing_cols:
-                                # Mostrar cuales son las columnas que faltan
-                                st.write(f"- {col}")
-                            st.stop()
-                        if not entradas and not salidas:
-                            st.warning("⚠️ There's not Addition nor Withdrawal of Cash")
-                            st.stop()
-                    
-                    df = df.dropna(how="all")
-                    st.session_state.df = df
-                    st.success("✅ File uploaded successfully")
-                
-                    if uploaded_file.name.endswith(".xlsx"):
-                        df["Trade Date"] = pd.to_datetime(df["Trade Date"])
+#         # if "df_filtrado" not in st.session_state:
+#         #     st.session_state.df_filtrado = None
+            
+#         # if "datos_excluidos" not in st.session_state:
+#         #     st.session_state.datos_excluidos = None
+            
+#         # if "proceso_completo" not in st.session_state:
+#         #     st.session_state.proceso_completo = False
 
-                        df["Trade Date"] = (
-                            df["Trade Date"].dt.day.astype(str) + '/' +
-                            df["Trade Date"].dt.month.astype(str) + '/' +
-                            df["Trade Date"].dt.year.astype(str)
-                        )
-                        
-                except Exception as e:
-                    st.error(f"Error reading the file: {e}")
-            # ------------------------
-            # BOTÓN FILTRAR
-            # ------------------------  
-            if st.session_state.df is not None:
-                if st.button("Filter file"):
-                    st.session_state.filter_clicked = True
-                    
-                if st.session_state.filter_clicked:
-                    df = st.session_state.df.copy() 
-                    
-                    
-                    
-                    # FILTRAR
-                    df_filtrado, datos_excluidos = filtrar(df, cols)
-                    st.session_state.df_filtrado = df_filtrado 
-                    st.session_state.datos_excluidos = datos_excluidos
-                    st.session_state.proceso_completo = True 
-                    
-                    if df_filtrado.empty:
-                        st.warning("⚠️ All transactions are debit, interest, or internal")
-                    else:
-                        st.success("✅ File filtered successfully") 
-                    
-            # ------------------------
-            # MOSTRAR ELIMINADOS
-            # ------------------------  
-            if st.session_state.proceso_completo:
-                datos_excluidos = st.session_state.datos_excluidos.copy() 
-                st.info(f"🗑️ Data to delete: {len(datos_excluidos)}")
-                
-                if not datos_excluidos.empty:
-                    if "Select" not in datos_excluidos.columns:
-                        df_display = datos_excluidos.copy()
-                        df_display.insert(0,"Select", False)
-                        edited_df = st.data_editor(
-                            df_display,
-                            hide_index = True,
-                            column_config={
-                                "Select": st.column_config.CheckboxColumn("Select")
-                                },
-                                width = "stretch"
-                            )
-                        toggle = st.toggle("Add selected data")
-                        df_final = st.session_state.df_filtrado.copy()
-                        
-                        if toggle:
-                            seleccionados = edited_df[edited_df["Select"] == True]
-                            df_final = pd.concat([df_final, seleccionados.drop(columns=["Select"])])
-                            st.info(f"{len(seleccionados)} data were added")
-                        else:
-                            st.info("No data was added")
-                        # ------------------------
-                        # CREAR EXCEL
-                        # ------------------------
-                        output = crear_excel(df_final)
-                        
-                        # Guardar en session state
-                        st.session_state.archivo_listo = True
-                        
-                        # ------------------------
-                        # DESCARGAR
-                        # ------------------------
-                        if not df_final.empty: 
-                            fecha_min = df_final["Trade Date"].min()
-                            fecha_max = df_final["Trade Date"].max()
-                            # Nombre por default 
-                            if fecha_min == fecha_max:
-                                nombre_archivo = f"Report_{fecha_min}"
-                            else:
-                                nombre_archivo = f"Report_{fecha_min}-{fecha_max}"
-                            st.session_state.nombre_archivo = nombre_archivo
-                            if st.session_state.archivo_listo:
-                                descargar(st.session_state.nombre_archivo, output)
-                        else:
-                            st.warning("⚠️ The file is empty")
+#         # if "archivo_listo" not in st.session_state:
+#         #     st.session_state.archivo_listo = False
+        
+#         # if "last_file" not in st.session_state:
+#         #     st.session_state.last_file = None
 
-                if uploaded_file is None and "df" in st.session_state:
-                    for key in list(st.session_state.keys()):
-                        del st.session_state[key]
-                    st.rerun()
+#         # # ---------------------------------------------------------------------------------------------
+    
+#         # # Insertar menú lateral
+#         # with st.sidebar:
+#         #     # Título
+#         #     st.title(":blue[Select an option]")
+#         #     # Pills Options
+#         #     selection = st.pills(label="Options", label_visibility="collapsed",
+#         #                          options=["Home", "Generate Report"],
+#         #                          default="Home"
+#         #                         )
+#         # # Botón cerrar sesión
+#         # if st.sidebar.button("Log out"):
+#         #     st.cache_data.clear()
+#         #     st.toast("Caché eliminada")
+#         #     st.session_state["pswd"] = False
+#         #     st.rerun()
+            
+#         # # Ejecutar opción seleccionada
+#         # if selection == "Generate Report":
+#         #     #st.set_page_config(page_title="Transactions Report", layout="wide")
+#         #     st.title("🧾 Transactions Report")
+
+#         #     # ------------------------
+#         #     # SUBIR ARCHIVO
+#         #     # ------------------------
+#         #     uploaded_file = st.file_uploader("Upload file", type=["csv", "xlsx"],key="file")
+
+#         #     if uploaded_file is None:
+#         #         st.session_state.pop("filter_clicked", None)
+#         #         st.session_state.pop("df", None)
+#         #         st.stop()
+
+#         #     if uploaded_file is not None:
+#         #         if uploaded_file != st.session_state.last_file:
+#         #             st.session_state.last_file = uploaded_file
+                    
+#         #             # Reset completo
+#         #             st.session_state.filter_clicked = False
+#         #             st.session_state.df_filtrado = None
+#         #             st.session_state.datos_excluidos = None
+#         #             st.session_state.proceso_completo = False
+#         #             st.session_state.archivo_listo = False
+
+#         #     if uploaded_file:
+#         #         try: 
+#         #             if uploaded_file.name.endswith(".csv"):
+#         #                 try:
+#         #                     df = pd.read_csv(uploaded_file)
+#         #                 except:
+#         #                     df = pd.read_csv(uploaded_file, sep=None, engine="python")
+#         #             else: 
+#         #                 df = pd.read_excel(uploaded_file)
+                        
+#         #             if df.empty: 
+#         #                 st.warning("⚠️ The file is empty")
+#         #                 st.stop()
+                    
+#         #             else: 
+#         #                 # Quitar espacios en los nombres de las columnas
+#         #                 df.columns = df.columns.str.strip().str.replace(r"\s+", " ", regex=True)
+                    
+#         #                 # Columnas faltantes
+#         #                 missing_cols = set(cols) - set(df.columns)
+                    
+#         #                 filtro = df['Transaction Type'].dropna().str.lower()
+#         #                 entradas = filtro.str.contains("addition").any()
+#         #                 salidas = filtro.str.contains("withdrawal of cash").any()
+            
+#         #                 # Enviar mensajes de error si faltan columnas para realizar el filtro
+#         #                 if missing_cols:
+#         #                     st.error("❌ The file doesn't contain all the necessary columns")
+#         #                     st.info("The following columns are missing:")
+#         #                     for col in missing_cols:
+#         #                         # Mostrar cuales son las columnas que faltan
+#         #                         st.write(f"- {col}")
+#         #                     st.stop()
+#         #                 if not entradas and not salidas:
+#         #                     st.warning("⚠️ There's not Addition nor Withdrawal of Cash")
+#         #                     st.stop()
+                    
+#         #             df = df.dropna(how="all")
+#         #             st.session_state.df = df
+#         #             st.success("✅ File uploaded successfully")
+                
+#         #             if uploaded_file.name.endswith(".xlsx"):
+#         #                 df["Trade Date"] = pd.to_datetime(df["Trade Date"])
+
+#         #                 df["Trade Date"] = (
+#         #                     df["Trade Date"].dt.day.astype(str) + '/' +
+#         #                     df["Trade Date"].dt.month.astype(str) + '/' +
+#         #                     df["Trade Date"].dt.year.astype(str)
+#         #                 )
+                        
+#         #         except Exception as e:
+#         #             st.error(f"Error reading the file: {e}")
+#         #     # ------------------------
+#         #     # BOTÓN FILTRAR
+#         #     # ------------------------  
+#         #     if st.session_state.df is not None:
+#         #         if st.button("Filter file"):
+#         #             st.session_state.filter_clicked = True
+                    
+#         #         if st.session_state.filter_clicked:
+#         #             df = st.session_state.df.copy() 
+                    
+                    
+                    
+#         #             # FILTRAR
+#         #             df_filtrado, datos_excluidos = filtrar(df, cols)
+#         #             st.session_state.df_filtrado = df_filtrado 
+#         #             st.session_state.datos_excluidos = datos_excluidos
+#         #             st.session_state.proceso_completo = True 
+                    
+#         #             if df_filtrado.empty:
+#         #                 st.warning("⚠️ All transactions are debit, interest, or internal")
+#         #             else:
+#         #                 st.success("✅ File filtered successfully") 
+                    
+#         #     # ------------------------
+#         #     # MOSTRAR ELIMINADOS
+#         #     # ------------------------  
+#         #     if st.session_state.proceso_completo:
+#         #         datos_excluidos = st.session_state.datos_excluidos.copy() 
+#         #         st.info(f"🗑️ Data to delete: {len(datos_excluidos)}")
+                
+#         #         if not datos_excluidos.empty:
+#         #             if "Select" not in datos_excluidos.columns:
+#         #                 df_display = datos_excluidos.copy()
+#         #                 df_display.insert(0,"Select", False)
+#         #                 edited_df = st.data_editor(
+#         #                     df_display,
+#         #                     hide_index = True,
+#         #                     column_config={
+#         #                         "Select": st.column_config.CheckboxColumn("Select")
+#         #                         },
+#         #                         width = "stretch"
+#         #                     )
+#         #                 toggle = st.toggle("Add selected data")
+#         #                 df_final = st.session_state.df_filtrado.copy()
+                        
+#         #                 if toggle:
+#         #                     seleccionados = edited_df[edited_df["Select"] == True]
+#         #                     df_final = pd.concat([df_final, seleccionados.drop(columns=["Select"])])
+#         #                     st.info(f"{len(seleccionados)} data were added")
+#         #                 else:
+#         #                     st.info("No data was added")
+#         #                 # ------------------------
+#         #                 # CREAR EXCEL
+#         #                 # ------------------------
+#         #                 output = crear_excel(df_final)
+                        
+#         #                 # Guardar en session state
+#         #                 st.session_state.archivo_listo = True
+                        
+#         #                 # ------------------------
+#         #                 # DESCARGAR
+#         #                 # ------------------------
+#         #                 if not df_final.empty: 
+#         #                     fecha_min = df_final["Trade Date"].min()
+#         #                     fecha_max = df_final["Trade Date"].max()
+#         #                     # Nombre por default 
+#         #                     if fecha_min == fecha_max:
+#         #                         nombre_archivo = f"Report_{fecha_min}"
+#         #                     else:
+#         #                         nombre_archivo = f"Report_{fecha_min}-{fecha_max}"
+#         #                     st.session_state.nombre_archivo = nombre_archivo
+#         #                     if st.session_state.archivo_listo:
+#         #                         descargar(st.session_state.nombre_archivo, output)
+#         #                 else:
+#         #                     st.warning("⚠️ The file is empty")
+
+#         #         if uploaded_file is None and "df" in st.session_state:
+#         #             for key in list(st.session_state.keys()):
+#         #                 del st.session_state[key]
+#         #             st.rerun()
                             
 
-        else:
+#         # else:
 
-            images.imagen_home("Advisors")
-            # Instrucciones
-            st.header("Instructions")
-            st.info("Follow the steps carefully to complete the process")
-            st.markdown("""
-            1. Click the **Generate Report** button.
-            2. Drag or upload the .csv or .xlsx file you want to filter.
-            3. Click the **Filter file** button.
-            4. Click the checkbox in the Select column to add data.
-            5. Click the **Add selected data** if necessary.                           
-            6. Click the Download Excel button.""")  
-            st.warning("Don't close the page during the download.")
-            st.markdown("""            
-            7. Click Save As and choose the folder.
-            8. Log out and close the window.
-                        """)           
+#         #     images.imagen_home("Advisors")
+#         #     # Instrucciones
+#         #     st.header("Instructions")
+#         #     st.info("Follow the steps carefully to complete the process")
+#         #     st.markdown("""
+#         #     1. Click the **Generate Report** button.
+#         #     2. Drag or upload the .csv or .xlsx file you want to filter.
+#         #     3. Click the **Filter file** button.
+#         #     4. Click the checkbox in the Select column to add data.
+#         #     5. Click the **Add selected data** if necessary.                           
+#         #     6. Click the Download Excel button.""")  
+#         #     st.warning("Don't close the page during the download.")
+#         #     st.markdown("""            
+#         #     7. Click Save As and choose the folder.
+#         #     8. Log out and close the window.
+#         #                 """)           
         
         
 if __name__ == "__main__":
