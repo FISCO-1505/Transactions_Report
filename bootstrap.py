@@ -41,7 +41,6 @@ def ensure_private_lib():
                     st.success("Sources loaded correctly.")
                     import FISCO_Sources
                 except Exception as e:
-                    st.error(f"Error técnico de pip: {str(e)}")
                     st.error(f"Error: Library did not load correctly.")
                     st.stop()
         else:
