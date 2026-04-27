@@ -27,7 +27,7 @@ def ensure_private_lib():
     except ImportError:
         if "GITHUB_TOKEN" in st.secrets:
             token = st.secrets["GITHUB_TOKEN"]
-            repo_url = f"git+https://{token}@github.com/FISCO-1505/Finaccess_Resources.git@Test2_branch" #para poder descargr una rama es de la siguiente forma "@nombre_rama" agregandose al final"
+            repo_url = f"git+https://{token}@github.com/FISCO-1505/Finaccess_Resources.git" #para poder descargr una rama es de la siguiente forma "@nombre_rama" agregandose al final"
             
             with st.spinner("Uploading sources..."):
                 try:
