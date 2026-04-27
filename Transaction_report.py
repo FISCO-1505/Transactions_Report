@@ -399,6 +399,30 @@ def contenido_principal():
                             descargar(st.session_state.nombre_archivo, output)
                     else:
                         st.warning("⚠️ The file is empty")
+            if datos_excluidos.empty:
+                df_final = st.session_state.df_filtrado.copy()
+                # ------------------------
+                # CREAR EXCEL
+                # ------------------------
+                output = crear_excel(df_final)
+                
+                # Guardar en session state
+                st.session_state.archivo_listo = True
+                
+                # ------------------------
+                # DESCARGAR
+                # ------------------------
+                if not df_final.empty: 
+                    fecha_min = df_final["Trade Date"].min()
+                    fecha_max = df_final["Trade Date"].max()
+                    # Nombre por default 
+                    if fecha_min == fecha_max:
+                        nombre_archivo = f"Report_{fecha_min}"
+                    else:
+                        nombre_archivo = f"Report_{fecha_min}-{fecha_max}"
+                    st.session_state.nombre_archivo = nombre_archivo
+                    if st.session_state.archivo_listo:
+                        descargar(st.session_state.nombre_archivo, output)
 
             if uploaded_file is None and "df" in st.session_state:
                 for key in list(st.session_state.keys()):
