@@ -15,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from FISCO_Sources import auth, crypto, images
 
+
 images.imagen_f("Transactions & Funds")
 
 def mask_cash(df):
