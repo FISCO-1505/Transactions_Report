@@ -15,9 +15,11 @@ from datetime import datetime
 from pathlib import Path
 from FISCO_Sources import auth, crypto, images
 
-
+# Configura el título y el ícono de la pestaña del navegador
 images.imagen_f("Transactions & Funds")
 
+# -----------------------------------------------------------------------------------
+# Devuelve una máscara booleana con aquellos conceptos que se desean excluir para TR
 def mask_cash(df):
     return (
         df["Referencia Movimiento"].str.contains(
@@ -31,8 +33,9 @@ def mask_cash(df):
         )
     )
 
-# ----------------------------------------------------------------
+# -----------------------------------------------------------------------------------
 
+# Devuelve una máscara booleana con aquellos conceptos que se desean excluir para FT
 def mask_security(df):
     return df["Security Name"].str.contains(
         r"\bCASH\b",
@@ -41,18 +44,20 @@ def mask_security(df):
         na=False
     )
 
-# -----------------------------------------------------------------
+# -----------------------------------------------------------------------------------
 
 # Función para realizar el filtro de los datos
 def filtrar(df,columna_clave,transacciones,mask_excluir_func,sort_cols,cols_seleccionar=None,columnas_drop=None,rename_cols=None):
     
-    # Selección inicial
+    # Selección de columnas necesarias
     if cols_seleccionar:
         df = df[cols_seleccionar]
 
+    # Eliminar columnas 
     if columnas_drop:
         df = df.drop(columns=columnas_drop, errors='ignore')
 
+    # Renombrar columnas
     if rename_cols:
         df = df.rename(columns=rename_cols)
 
@@ -65,30 +70,36 @@ def filtrar(df,columna_clave,transacciones,mask_excluir_func,sort_cols,cols_sele
         (df[columna_clave].astype(str).str.strip() == "")
     ]
 
-    # Limpiar
+    # Guarda los valores donde la columna_clave no es nula
     df = df[df[columna_clave].notna()].copy()
 
+    # Convertir los valores en texto y eliminar espacios 
     df[columna_clave] = (
         df[columna_clave]
         .astype(str)
         .str.strip()
     )
 
+    # Tomar los datos que no son vacíos
     df = df[df[columna_clave] != ""]
 
+    # Guardar datos con monto cero
     datos_cero = df[df["Net Amount Base"] == 0]
 
+    # Tomar los datos con monto distinto de cero
     df = df[df["Net Amount Base"] != 0]
 
     # Aplicar regla específica
     mask_excluir = mask_excluir_func(df)
 
+    # Tabla con datos a excluir
     datos_excluidos = (
         pd.concat([datos_vacios, datos_cero, df[mask_excluir]])
         .sort_values(by=sort_cols)
         .reset_index(drop=True)
     )
 
+    # Tabla con datos filtrados
     df = (
         df[~mask_excluir]
         .sort_values(by=sort_cols)
@@ -98,6 +109,27 @@ def filtrar(df,columna_clave,transacciones,mask_excluir_func,sort_cols,cols_sele
     return df, datos_excluidos
 
 # ---------------------------------------------------------------------------------------------
+
+# Dar formato a las fechas
+def formatear_fecha(x):
+    # Caso Timestamp o datetime
+    if isinstance(x, (pd.Timestamp, datetime)):
+        # Intercambiar día y mes
+        fecha = datetime(x.year, x.day, x.month)
+        return fecha.strftime("%m/%d/%Y")
+
+    # Caso string
+    if isinstance(x, str):
+        try:
+            fecha = datetime.strptime(x, "%m/%d/%Y")
+            return fecha.strftime("%m/%d/%Y")
+        except:
+            return x
+
+    return x
+# ---------------------------------------------------------------------------------------------
+
+# Función para dar formato en el Excel
 def column_formats(workbook):
     left = workbook.add_format({
         "align": "left",
@@ -159,6 +191,8 @@ def column_formats(workbook):
     } 
     }
 # ---------------------------------------------------------------------------------------------
+
+# Ancho de cada columna en el Excel
 column_widths_cash = {
         "Trade Date": 14,
         "Client": 12,
@@ -192,7 +226,8 @@ def crear_excel(df,sort_cols,columna_texto=None,column_widths=None,format_factor
     df = df.fillna("-")
     # Ordenar los datos 
     df = df.sort_values(by=sort_cols)
-    
+
+    # Obtener la longitud del concepto más largo
     if columna_texto and columna_texto in df.columns:
         ancho = (
             df[columna_texto]
@@ -202,6 +237,7 @@ def crear_excel(df,sort_cols,columna_texto=None,column_widths=None,format_factor
             .max()
         )
 
+        # Establecer el ancho de la columna 
         if column_widths is not None:
             column_widths[columna_texto] = (ancho+2) * 1.3
     
@@ -227,12 +263,9 @@ def crear_excel(df,sort_cols,columna_texto=None,column_widths=None,format_factor
             col += 1
         row = row + n_rows + 1
 
-    
     # Aplicar formato y ancho por columna
     for col_num, col_name in enumerate(df.columns):
-        # formato con alineación
-        fmt = formats.get(col_name)  
-        # ancho de 20 
+        fmt = formats.get(col_name)   
         width = column_widths.get(col_name, 20)  
         worksheet.set_column(col_num, col_num, width, fmt)
         
@@ -252,9 +285,10 @@ def crear_excel(df,sort_cols,columna_texto=None,column_widths=None,format_factor
     # Escribir encabezados  
     for col_num, column in enumerate(df.columns):
         worksheet.write(0, col_num, column, header_format)
-            
+
+    # Cerrar Excel         
     workbook.close()    
-    # Muve el cursor al inicio               
+    # Mover el cursor al inicio               
     output.seek(0) 
     
     return output  
@@ -274,15 +308,20 @@ def descargar(nombre_archivo, output):
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",          
     )
 
+    # Limpiar cache
     if clicked:
-        # Limpiar cache
         st.cache_data.clear()
         
 # ---------------------------------------------------------------------------------------------
 
+# Interfaz para cargar archivo y guardar session_state cuando el usuario cambia de archivo
 def mostrar_interfaz(titulo=None, texto=None, key=None):
     
-    st.title(titulo)
+    # Estilo para el título
+    st.markdown(
+                f"<h1 style='color:#35404A;'>{titulo}</h1>",
+                unsafe_allow_html=True
+            )
 
     # ------------------------
     # SUBIR ARCHIVO
@@ -310,18 +349,22 @@ def mostrar_interfaz(titulo=None, texto=None, key=None):
 
 # -----------------------------------------------------------------------------------------------------------
 
+# Leer archivo y comprobar que cumple con los requisitos para filtrar
 def leer_archivo(uploaded_file, columnas_necesarias, columna_filtro, valores, mensaje, contains=False, ignore_case=False, columnas_fecha=None):
     
     if uploaded_file:
         try: 
+            # Distinguir si el archivo es csv o xlsx 
             if uploaded_file.name.endswith(".csv"):
                 try:
                     df = pd.read_csv(uploaded_file)
+                    
                 except:
                     df = pd.read_csv(uploaded_file, sep=None, engine="python")
             else: 
                 df = pd.read_excel(uploaded_file)
-                
+
+            # Mensaje de alerta si el archivo esta vacío     
             if df.empty: 
                 st.warning("⚠️ The file is empty")
                 st.stop()
@@ -331,19 +374,19 @@ def leer_archivo(uploaded_file, columnas_necesarias, columna_filtro, valores, me
                 # Quitar espacios en los nombres de las columnas
                 df.columns = df.columns.str.strip().str.replace(r"\s+", " ", regex=True)
                 
-            
                 # Columnas faltantes
                 columnas_faltantes = set(columnas_necesarias) - set(df.columns)
                 
-                # Enviar mensajes de error si faltan columnas para realizar el filtro
+                # Enviar mensajes de error si faltan columnas y mostrar cuales faltan
                 if columnas_faltantes:
                     st.error("❌ The file doesn't contain all the necessary columns")
                     st.info("The following columns are missing:")
+
                     for col in columnas_faltantes:
-                        # Mostrar cuales son las columnas que faltan
                         st.write(f"- {col}")
                     st.stop()
-                    
+
+                # Quitar valores nulos de la columna de filtro    
                 filtro = df[columna_filtro].dropna()
 
                 if ignore_case:
@@ -359,26 +402,35 @@ def leer_archivo(uploaded_file, columnas_necesarias, columna_filtro, valores, me
                     st.warning(mensaje)
                     st.stop()
             
-            
+            # Quitar datos vacíos
             df= df.dropna(how="all")
-            st.session_state.df = df
-            st.success("✅ File uploaded successfully")
-        
+
+            if uploaded_file.name.endswith(".csv"):
+                for col in columnas_fecha:
+                    df[col] = pd.to_datetime(df[col], format="%m/%d/%Y")
+                    if col in df.columns:
+                        df[col] = df[col].apply(
+                            lambda x: x.strftime("%m/%d/%Y")
+                            if isinstance(x, (pd.Timestamp, datetime))
+                            else x
+                            ) 
+                 
             if uploaded_file.name.endswith(".xlsx"):
                 for col in columnas_fecha:
                     if col in df.columns:
-                        df[col] = df[col].apply(
-                            lambda x: x.strftime("%d/%m/%Y")
-                            if isinstance(x, (pd.Timestamp, datetime))
-                            else x
-                        )
-                    
-                
+                        df[col] = df[col].apply(formatear_fecha) 
+
+            # Mostrar mensaje exitoso
+            st.session_state.df = df
+            st.success("✅ File uploaded successfully")
+       
         except Exception as e:
             st.error(f"Error reading the file: {e}")
     return df
 
 # ---------------------------------------------------------------------------------------------
+
+# Función principal
 def contenido_principal():
 
     # Columnas necesarias
@@ -438,13 +490,14 @@ def contenido_principal():
     with st.sidebar:
         # Título
         st.title(":blue[Select an option]")
-        # Pills Options
+        # Forma y nombre de botones
         selection = st.pills(label="Options", label_visibility="collapsed",
                                 options=["Home", "Transactions Report", "Funds Transactions"],
                                 default="Home"
                             )
-        
-    # Botón cerrar sesión
+    # ------------------------
+    # BOTÓN CERRAR SESIÓN 
+    # ------------------------ 
     if st.sidebar.button("Log out"):
         st.cache_data.clear()
         st.toast("Caché eliminada")
@@ -456,6 +509,7 @@ def contenido_principal():
 
         uploaded_file = mostrar_interfaz(titulo="🧾 Transactions Report", texto="Upload Transactions File", key="transactions_file")
 
+        # Dar parámetros a la función 
         leer_archivo(uploaded_file, cols,
                       'Transaction Type',
                        ["addition", "withdrawal of cash"], 
@@ -640,8 +694,10 @@ def contenido_principal():
         # ------------------------  
         if st.session_state.proceso_completo:
             datos_excluidos = st.session_state.datos_excluidos.copy() 
+            # Mostrar mensaje de cuantos datos se van a excluir
             st.info(f"🗑️ Data to delete: {len(datos_excluidos)}")
             
+            # Muestra la tabla con checkboxs de los datos excluidos
             if not datos_excluidos.empty:
                 if "Select" not in datos_excluidos.columns:
                     df_display = datos_excluidos.copy()
@@ -654,18 +710,24 @@ def contenido_principal():
                             },
                             width = "stretch"
                         )
+
+                    # Botón de Agregar datos seleccionados
                     toggle = st.toggle("Add selected data")
                     df_final = st.session_state.df_filtrado.copy()
-                    
+
+                    # Agregar datos seleccionados al data frame
                     if toggle:
                         seleccionados = edited_df[edited_df["Select"] == True]
                         df_final = pd.concat([df_final, seleccionados.drop(columns=["Select"])])
                         st.info(f"{len(seleccionados)} data were added")
                     else:
+                        # Mostrar mensaje si no se agregaron datos
                         st.info("No data was added")
                     # ------------------------
                     # CREAR EXCEL
                     # ------------------------
+
+                    # Dar parametros al función que crea el excel
                     output = crear_excel(
                                         df=df_final,
                                         sort_cols=["Trade Date", "Account Code"],
@@ -681,10 +743,11 @@ def contenido_principal():
                     # ------------------------
                     # DESCARGAR
                     # ------------------------
+
+                    # Generar nombre del archivo
                     if not df_final.empty: 
                         fecha_min = df_final["Trade Date"].min()
                         fecha_max = df_final["Trade Date"].max()
-                        # Nombre por default 
                         if fecha_min == fecha_max:
                             nombre_archivo = f"Funds Report_{fecha_min}"
                         else:
@@ -693,12 +756,16 @@ def contenido_principal():
                         if st.session_state.archivo_listo:
                             descargar(st.session_state.nombre_archivo, output)
                     else:
+                        # Mostrar alerta si el archivo filtrado no tiene información
                         st.warning("⚠️ The file is empty; please add data if you want to download the file")
+
             if datos_excluidos.empty:
                 df_final = st.session_state.df_filtrado.copy()
                 # ------------------------
                 # CREAR EXCEL
                 # ------------------------
+
+                # Dar parámetros a función crear Excel
                 output = crear_excel(
                                         df=df_final,
                                         sort_cols=["Trade Date", "Account Code"],
@@ -714,10 +781,11 @@ def contenido_principal():
                 # ------------------------
                 # DESCARGAR
                 # ------------------------
+
+                # Generar nombre del archivo
                 if not df_final.empty: 
                     fecha_min = df_final["Trade Date"].min()
                     fecha_max = df_final["Trade Date"].max()
-                    # Nombre por default 
                     if fecha_min == fecha_max:
                         nombre_archivo = f"Funds Report_{fecha_min}"
                     else:
@@ -726,6 +794,7 @@ def contenido_principal():
                     if st.session_state.archivo_listo:
                         descargar(st.session_state.nombre_archivo, output)
 
+            # Limpia la sesión cuando el usuario quitó el archivo cargado
             if uploaded_file is None and "df" in st.session_state:
                 for key in list(st.session_state.keys()):
                     del st.session_state[key]
@@ -756,6 +825,7 @@ def main():
     global ruta_base
     ruta_base = Path(__file__).resolve().parent
 
+    # Autenticación, ejecución de función principal, idioma y tiempo de inactividad   
     auth.gestionar_sesion_segura(
         contenido_principal_func = contenido_principal,
         password_secreta = st.secrets["PSW_STREAMLIT"],
